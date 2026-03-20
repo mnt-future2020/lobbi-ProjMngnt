@@ -1,0 +1,7 @@
+node_modules
+.next
+.env.local
+public/uploads/developers/*
+public/uploads/attachments/*
+!public/uploads/developers/.gitkeep
+!public/uploads/attachments/.gitkeep
