@@ -300,22 +300,22 @@ export default function TasksPage() {
   return (
     <div className="space-y-5">
       {/* Page Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Task Management</h1>
+          <h1 className="text-xl lg:text-2xl font-bold text-gray-900">Task Management</h1>
           <p className="text-sm text-gray-500 mt-1">{total} total tasks</p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowImportModal(true)}
-            className="btn-secondary flex items-center gap-2"
+            className="btn-secondary flex items-center gap-2 text-xs sm:text-sm"
           >
             <FileSpreadsheet className="w-4 h-4" />
-            Import
+            <span className="hidden sm:inline">Import</span>
           </button>
           <button
             onClick={() => setShowAddRow(true)}
-            className="btn-primary flex items-center gap-2"
+            className="btn-primary flex items-center gap-2 text-xs sm:text-sm"
           >
             <Plus className="w-4 h-4" />
             Add Task
@@ -324,9 +324,9 @@ export default function TasksPage() {
       </div>
 
       {/* Search & Filters Bar - Always visible */}
-      <div className="card p-5 space-y-4">
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="relative flex-1 min-w-[200px]">
+      <div className="card p-4 lg:p-5 space-y-3 lg:space-y-4">
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+          <div className="relative flex-1 min-w-[150px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
@@ -893,9 +893,9 @@ export default function TasksPage() {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
-            <p className="text-sm text-gray-500">
-              Page {page} of {totalPages} ({total} tasks)
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 flex-wrap gap-2">
+            <p className="text-xs sm:text-sm text-gray-500">
+              Page {page} of {totalPages} ({total})
             </p>
             <div className="flex items-center gap-1">
               <button

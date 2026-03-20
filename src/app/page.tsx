@@ -101,9 +101,9 @@ export default function HomePage() {
   const content = (
     <div className="space-y-6">
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-5">
         {statCards.map((card) => (
-          <div key={card.label} className="card p-5">
+          <div key={card.label} className="card p-3 lg:p-5">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500 font-medium">{card.label}</p>
@@ -267,8 +267,8 @@ export default function HomePage() {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
-            <p className="text-sm text-gray-500">Page {page} of {totalPages} ({total} tasks)</p>
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 flex-wrap gap-2">
+            <p className="text-xs sm:text-sm text-gray-500">Page {page} of {totalPages} ({total})</p>
             <div className="flex items-center gap-1">
               <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1} className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed">
                 <ChevronLeft className="w-4 h-4" />
@@ -338,9 +338,9 @@ export default function HomePage() {
     return (
       <div className="min-h-screen bg-gray-50">
         <Sidebar />
-        <div className="ml-64">
+        <div className="lg:ml-64">
           <TopNav />
-          <main className="p-6">
+          <main className="p-4 lg:p-6">
             <div className="mb-6">
               <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
               <p className="text-sm text-gray-500 mt-1">Overview of all project tasks</p>
@@ -356,11 +356,11 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b border-gray-200 sticky top-0 z-20">
-        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
-          <img src="/logo.png" alt="LOBBI" className="h-10 object-contain" />
+        <div className="max-w-7xl mx-auto px-4 lg:px-6 py-3 flex items-center justify-between">
+          <img src="/logo.png" alt="LOBBI" className="h-8 sm:h-10 object-contain" />
         </div>
       </header>
-      <main className="max-w-7xl mx-auto px-6 py-6">
+      <main className="max-w-7xl mx-auto px-4 lg:px-6 py-4 lg:py-6">
         {content}
       </main>
     </div>

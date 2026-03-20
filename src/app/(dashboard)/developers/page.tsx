@@ -154,9 +154,9 @@ export default function DevelopersPage() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Developer Management</h1>
+          <h1 className="text-xl lg:text-2xl font-bold text-gray-900">Developer Management</h1>
           <p className="text-sm text-gray-500 mt-1">{total} team members</p>
         </div>
         <button onClick={openAddModal} className="btn-primary flex items-center gap-2">
@@ -166,7 +166,7 @@ export default function DevelopersPage() {
       </div>
 
       {/* Search & Filters - Always visible */}
-      <div className="card p-4 space-y-3">
+      <div className="card p-4 lg:p-5 space-y-3">
         <div className="flex items-center gap-3 flex-wrap">
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -257,8 +257,8 @@ export default function DevelopersPage() {
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
-          <p className="text-sm text-gray-500">
-            Page {page} of {totalPages} ({total} developers)
+          <p className="text-xs sm:text-sm text-gray-500">
+            Page {page} of {totalPages} ({total})
           </p>
           <div className="flex items-center gap-1">
             <button

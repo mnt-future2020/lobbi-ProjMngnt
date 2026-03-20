@@ -14,14 +14,17 @@ export default function TopNav({ onSearch }: TopNavProps) {
   const { user, isAuthenticated, logout } = useAuth();
 
   return (
-    <header className="sticky top-0 z-20 bg-white border-b border-gray-200 px-6 py-3">
-      <div className="flex items-center justify-between">
+    <header className="sticky top-0 z-20 bg-white border-b border-gray-200 px-4 lg:px-6 py-3">
+      <div className="flex items-center justify-between gap-3">
+        {/* Spacer for mobile hamburger */}
+        <div className="w-10 lg:hidden" />
+
         {/* Search */}
-        <div className="relative w-96">
+        <div className="relative flex-1 max-w-md hidden sm:block">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             type="text"
-            placeholder="Search tasks, developers..."
+            placeholder="Search..."
             className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand transition-colors"
             value={searchValue}
             onChange={(e) => {
@@ -32,15 +35,15 @@ export default function TopNav({ onSearch }: TopNavProps) {
         </div>
 
         {/* Right side */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 ml-auto">
           {isAuthenticated ? (
             <>
               {/* Profile */}
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 <div className="w-8 h-8 bg-brand rounded-full flex items-center justify-center">
                   <User className="w-4 h-4 text-white" />
                 </div>
-                <div>
+                <div className="hidden sm:block">
                   <p className="text-sm font-medium text-gray-700">
                     {user?.name || "Admin"}
                   </p>

@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import {
-  ClipboardList,
   LogOut,
   Loader2,
   User,
@@ -36,25 +35,20 @@ export default function PortalLayout({
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Top Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-20">
-        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
-          <img src="/logo.png" alt="LOBBI" className="h-10 object-contain" />
+        <div className="max-w-7xl mx-auto px-4 lg:px-6 py-3 flex items-center justify-between">
+          <img src="/logo.png" alt="LOBBI" className="h-8 sm:h-10 object-contain" />
 
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               {user.avatar ? (
-                <img
-                  src={user.avatar}
-                  alt={user.name}
-                  className="w-8 h-8 rounded-full object-cover"
-                />
+                <img src={user.avatar} alt={user.name} className="w-8 h-8 rounded-full object-cover" />
               ) : (
                 <div className="w-8 h-8 rounded-full bg-brand/10 flex items-center justify-center">
                   <User className="w-4 h-4 text-brand" />
                 </div>
               )}
-              <div>
+              <div className="hidden sm:block">
                 <p className="text-sm font-medium text-gray-700">{user.name}</p>
                 <p className="text-xs text-gray-500">{user.role}</p>
               </div>
@@ -70,7 +64,7 @@ export default function PortalLayout({
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-6 py-6">{children}</main>
+      <main className="max-w-7xl mx-auto px-4 lg:px-6 py-4 lg:py-6">{children}</main>
     </div>
   );
 }
