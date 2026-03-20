@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useDevelopersPaginated } from "@/hooks/useDevelopers";
-import { cn, formatDate } from "@/lib/utils";
+import { cn, formatDate, apiError } from "@/lib/utils";
 import { IDeveloper } from "@/types";
 
 const roles = [
@@ -126,8 +126,8 @@ export default function DevelopersPage() {
       toast.success(editingDev ? "Developer updated" : "Developer added");
       setShowModal(false);
       mutate();
-    } catch {
-      toast.error("Failed to save developer");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to save developer");
     } finally {
       setSaving(false);
     }
@@ -137,11 +137,11 @@ export default function DevelopersPage() {
     if (!confirm("Delete this developer?")) return;
     try {
       const res = await fetch(`/api/developers/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error();
+      if (!res.ok) throw new Error(await apiError(res, "Failed to delete developer"));
       toast.success("Developer deleted");
       mutate();
-    } catch {
-      toast.error("Failed to delete developer");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to delete developer");
     }
   };
 

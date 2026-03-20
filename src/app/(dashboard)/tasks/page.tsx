@@ -21,7 +21,7 @@ import {
 import { toast } from "sonner";
 import { useTasks } from "@/hooks/useTasks";
 import { useDevelopers } from "@/hooks/useDevelopers";
-import { cn, formatDate } from "@/lib/utils";
+import { cn, formatDate, apiError } from "@/lib/utils";
 import { ITask, IAttachment, STATUS_OPTIONS, PRIORITY_OPTIONS } from "@/types";
 
 const statusColors: Record<string, string> = {
@@ -109,11 +109,11 @@ export default function TasksPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) throw new Error(await apiError(res, "Failed to update task"));
       toast.success("Task updated");
       mutate();
-    } catch {
-      toast.error("Failed to update task");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to update task");
     }
     cancelEditing();
   };
@@ -129,11 +129,11 @@ export default function TasksPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ [field]: value || null }),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) throw new Error(await apiError(res, "Failed to update task"));
       toast.success("Task updated");
       mutate();
-    } catch {
-      toast.error("Failed to update task");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to update task");
     }
   };
 
@@ -144,7 +144,7 @@ export default function TasksPage() {
       const formData = new FormData();
       formData.append("file", file);
       const res = await fetch("/api/upload", { method: "POST", body: formData });
-      if (!res.ok) throw new Error("Upload failed");
+      if (!res.ok) throw new Error(await apiError(res, "Upload failed"));
       const { path, filename } = await res.json();
       uploaded.push({
         filename,
@@ -181,7 +181,7 @@ export default function TasksPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) throw new Error(await apiError(res, "Failed to create task"));
       toast.success("Task created");
       setShowAddRow(false);
       setNewTask({
@@ -194,8 +194,8 @@ export default function TasksPage() {
       });
       setNewTaskFiles([]);
       mutate();
-    } catch {
-      toast.error("Failed to create task");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to create task");
     } finally {
       setUploading(null);
     }
@@ -205,11 +205,11 @@ export default function TasksPage() {
     if (!confirm("Delete this task?")) return;
     try {
       const res = await fetch(`/api/tasks/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error();
+      if (!res.ok) throw new Error(await apiError(res, "Failed to delete task"));
       toast.success("Task deleted");
       mutate();
-    } catch {
-      toast.error("Failed to delete task");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to delete task");
     }
   };
 
@@ -227,13 +227,13 @@ export default function TasksPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ attachments: allAttachments }),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) throw new Error(await apiError(res, "Failed to upload"));
       toast.success(
         `${newAttachments.length} image${newAttachments.length > 1 ? "s" : ""} uploaded`
       );
       mutate();
-    } catch {
-      toast.error("Failed to upload attachments");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to upload attachments");
     } finally {
       setUploading(null);
     }
@@ -250,15 +250,14 @@ export default function TasksPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ attachments }),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) throw new Error(await apiError(res, "Failed to remove attachment"));
       toast.success("Attachment removed");
-      // Update the modal data too
       setAttachmentModal((prev) =>
         prev && prev._id === taskId ? { ...prev, attachments } : prev
       );
       mutate();
-    } catch {
-      toast.error("Failed to remove attachment");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to remove attachment");
     }
   };
 

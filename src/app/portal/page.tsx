@@ -19,7 +19,7 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { useTasks, useTaskStats } from "@/hooks/useTasks";
-import { cn, formatDate } from "@/lib/utils";
+import { cn, formatDate, apiError } from "@/lib/utils";
 import { ITask, IAttachment } from "@/types";
 
 const statusColors: Record<string, string> = {
@@ -82,7 +82,7 @@ export default function PortalPage() {
       const formData = new FormData();
       formData.append("file", file);
       const res = await fetch("/api/upload", { method: "POST", body: formData });
-      if (!res.ok) throw new Error("Upload failed");
+      if (!res.ok) throw new Error(await apiError(res, "Upload failed"));
       const { path, filename } = await res.json();
       uploaded.push({ filename, path, uploadedAt: new Date().toISOString() });
     }
@@ -116,14 +116,14 @@ export default function PortalPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) throw new Error(await apiError(res, "Failed to create task"));
       toast.success("Task created successfully");
       setShowCreateModal(false);
       setNewTask({ title: "", description: "" });
       setNewTaskFiles([]);
       mutate();
-    } catch {
-      toast.error("Failed to create task");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to create task");
     } finally {
       setCreating(false);
     }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import Task from "@/lib/models/Task";
+import "@/lib/models/Developer";
 
 export const dynamic = "force-dynamic";
 
