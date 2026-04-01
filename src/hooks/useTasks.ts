@@ -28,9 +28,12 @@ export function useTasks(params: Record<string, string> = {}) {
   };
 }
 
-export function useTaskStats() {
+export function useTaskStats(assignee?: string) {
+  const url = assignee
+    ? `/api/tasks/stats?assignee=${assignee}`
+    : "/api/tasks/stats";
   const { data, error, isLoading, mutate } = useSWR<TaskStats>(
-    "/api/tasks/stats",
+    url,
     fetcher,
     {
       dedupingInterval: 5000,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import {
   Plus,
   Pencil,
@@ -17,8 +17,10 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useDevelopersPaginated } from "@/hooks/useDevelopers";
+import { useFilterParams } from "@/hooks/useFilterParams";
 import { cn, formatDate, apiError } from "@/lib/utils";
 import { IDeveloper } from "@/types";
+import MultiDatePicker from "@/components/MultiDatePicker";
 
 const roles = [
   "Frontend Developer",
@@ -30,17 +32,23 @@ const roles = [
   "QA Engineer",
 ];
 
-export default function DevelopersPage() {
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState("");
-  const [filterDate, setFilterDate] = useState("");
+function DevelopersPageContent() {
+  const filtersHook = useFilterParams();
+
+  const page = parseInt(filtersHook.get("page")) || 1;
+  const search = filtersHook.get("search");
+  const filterDates = filtersHook.get("dates");
+
+  const [searchInput, setSearchInput] = useState(search);
+
+  const setPage = (p: number) => filtersHook.set({ page: String(p) }, false);
 
   const params: Record<string, string> = {
     page: String(page),
     limit: "12",
   };
   if (search) params.search = search;
-  if (filterDate) { params.dateFrom = filterDate; params.dateTo = filterDate; }
+  if (filterDates) params.dates = filterDates;
 
   const { developers, total, totalPages, isLoading, mutate } = useDevelopersPaginated(params);
 
@@ -145,10 +153,11 @@ export default function DevelopersPage() {
     }
   };
 
+  const hasFilters = search || filterDates;
+
   const clearFilters = () => {
-    setSearch("");
-    setFilterDate("");
-    setPage(1);
+    setSearchInput("");
+    filtersHook.clear();
   };
 
   return (
@@ -174,17 +183,15 @@ export default function DevelopersPage() {
               type="text"
               placeholder="Search by name, email, role..."
               className="input-field pl-9"
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              value={searchInput}
+              onChange={(e) => { setSearchInput(e.target.value); filtersHook.setDebounced({ search: e.target.value }); }}
             />
           </div>
-          <input
-            type="date"
-            className="input-field w-auto text-sm"
-            value={filterDate}
-            onChange={(e) => { setFilterDate(e.target.value); setPage(1); }}
+          <MultiDatePicker
+            selectedDates={filterDates ? filterDates.split(",") : []}
+            onChange={(dates) => filtersHook.set({ dates: dates.join(",") })}
           />
-          {(search || filterDate) && (
+          {hasFilters && (
             <button onClick={clearFilters} className="text-sm text-red-500 hover:text-red-700">
               Clear
             </button>
@@ -200,8 +207,8 @@ export default function DevelopersPage() {
       ) : developers.length === 0 ? (
         <div className="card p-12 text-center">
           <User className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500">{search || filterDate ? "No developers found" : "No developers yet"}</p>
-          {!search && !filterDate && (
+          <p className="text-gray-500">{hasFilters ? "No developers found" : "No developers yet"}</p>
+          {!hasFilters && (
             <p className="text-sm text-gray-400 mt-1">Add your first team member to get started</p>
           )}
         </div>
@@ -387,5 +394,13 @@ export default function DevelopersPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function DevelopersPage() {
+  return (
+    <Suspense>
+      <DevelopersPageContent />
+    </Suspense>
   );
 }

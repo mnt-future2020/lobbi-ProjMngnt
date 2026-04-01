@@ -20,6 +20,7 @@ export async function GET(req: NextRequest) {
     const sortOrder = searchParams.get("sortOrder") || "desc";
     const dateFrom = searchParams.get("dateFrom") || "";
     const dateTo = searchParams.get("dateTo") || "";
+    const dates = searchParams.get("dates") || ""; // comma-separated: "2026-04-20,2026-04-21"
 
     const filter: Record<string, unknown> = {};
 
@@ -31,8 +32,37 @@ export async function GET(req: NextRequest) {
     }
     if (status) filter.status = status;
     if (priority) filter.priority = priority;
-    if (assignee) filter.assignee = assignee;
-    if (dateFrom || dateTo) {
+    if (assignee === "unassigned") {
+      filter.assignee = null;
+    } else if (assignee) {
+      filter.assignee = assignee;
+    }
+
+    // Multi-date filter: each date becomes a day range
+    if (dates) {
+      const dateConditions = dates.split(",").filter(Boolean).map((d) => {
+        const from = new Date(d);
+        from.setHours(0, 0, 0, 0);
+        const to = new Date(d);
+        to.setHours(23, 59, 59, 999);
+        return { date: { $gte: from, $lte: to } };
+      });
+      if (dateConditions.length === 1) {
+        filter.date = dateConditions[0].date;
+      } else if (dateConditions.length > 1) {
+        // Merge with existing $or if search is also present
+        if (filter.$or) {
+          const searchOr = filter.$or;
+          delete filter.$or;
+          filter.$and = [
+            { $or: searchOr as Record<string, unknown>[] },
+            { $or: dateConditions },
+          ];
+        } else {
+          filter.$or = dateConditions;
+        }
+      }
+    } else if (dateFrom || dateTo) {
       const dateFilter: Record<string, Date> = {};
       if (dateFrom) {
         const from = new Date(dateFrom);

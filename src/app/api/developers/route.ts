@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
     const search = searchParams.get("search") || "";
     const dateFrom = searchParams.get("dateFrom") || "";
     const dateTo = searchParams.get("dateTo") || "";
+    const dates = searchParams.get("dates") || "";
 
     const filter: Record<string, unknown> = {};
 
@@ -26,7 +27,30 @@ export async function GET(req: NextRequest) {
       ];
     }
 
-    if (dateFrom || dateTo) {
+    // Multi-date filter
+    if (dates) {
+      const dateConditions = dates.split(",").filter(Boolean).map((d) => {
+        const from = new Date(d);
+        from.setHours(0, 0, 0, 0);
+        const to = new Date(d);
+        to.setHours(23, 59, 59, 999);
+        return { createdAt: { $gte: from, $lte: to } };
+      });
+      if (dateConditions.length === 1) {
+        filter.createdAt = dateConditions[0].createdAt;
+      } else if (dateConditions.length > 1) {
+        if (filter.$or) {
+          const searchOr = filter.$or;
+          delete filter.$or;
+          filter.$and = [
+            { $or: searchOr as Record<string, unknown>[] },
+            { $or: dateConditions },
+          ];
+        } else {
+          filter.$or = dateConditions;
+        }
+      }
+    } else if (dateFrom || dateTo) {
       const dateFilter: Record<string, Date> = {};
       if (dateFrom) {
         const from = new Date(dateFrom);

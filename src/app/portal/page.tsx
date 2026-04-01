@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import {
   ClipboardList,
   CheckCircle2,
@@ -19,8 +19,11 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { useTasks, useTaskStats } from "@/hooks/useTasks";
+import { useFilterParams } from "@/hooks/useFilterParams";
+import { TaskStats } from "@/types";
 import { cn, formatDate, apiError } from "@/lib/utils";
 import { ITask, IAttachment } from "@/types";
+import MultiDatePicker from "@/components/MultiDatePicker";
 
 const statusColors: Record<string, string> = {
   Pending: "bg-yellow-100 text-yellow-700",
@@ -34,19 +37,24 @@ const priorityColors: Record<string, string> = {
   High: "bg-red-100 text-red-700",
 };
 
-export default function PortalPage() {
+function PortalPageContent() {
   const { user } = useAuth();
+  const filters = useFilterParams();
 
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("");
-  const [filterDate, setFilterDate] = useState("");
+  const page = parseInt(filters.get("page")) || 1;
+  const search = filters.get("search");
+  const filter = filters.get("status");
+  const filterDates = filters.get("dates");
+
+  const [searchInput, setSearchInput] = useState(search);
   const [attachmentModal, setAttachmentModal] = useState<ITask | null>(null);
   const [lightboxImage, setLightboxImage] = useState<IAttachment | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newTask, setNewTask] = useState({ title: "", description: "" });
   const [newTaskFiles, setNewTaskFiles] = useState<File[]>([]);
+
+  const setPage = (p: number) => filters.set({ page: String(p) }, false);
 
   // Build params for SWR
   const params: Record<string, string> = {
@@ -58,22 +66,19 @@ export default function PortalPage() {
   if (user?._id && !user?.isAdmin) params.assignee = user._id;
   if (search) params.search = search;
   if (filter) params.status = filter;
-  if (filterDate) { params.dateFrom = filterDate; params.dateTo = filterDate; }
+  if (filterDates) params.dates = filterDates;
 
   const { tasks, total, totalPages, isLoading, mutate } = useTasks(params);
 
-  // Stats from filtered tasks count (fetch all statuses separately would be overkill, use simple client count)
-  // But we need total counts, so fetch stats for this assignee
-  const myTotal = total;
-  const myCompleted = tasks.filter((t) => t.status === "Completed").length;
-  const myInProgress = tasks.filter((t) => t.status === "In Progress").length;
-  const myPending = tasks.filter((t) => t.status === "Pending").length;
+  // Fetch accurate stats from API scoped to this developer
+  const assigneeId = user?._id && !user?.isAdmin ? user._id : undefined;
+  const { stats, isLoading: statsLoading } = useTaskStats(assigneeId);
 
   const statCards = [
-    { label: "My Tasks", value: myTotal, icon: ClipboardList, color: "text-blue-500", bg: "bg-blue-50" },
-    { label: "Completed", value: myCompleted, icon: CheckCircle2, color: "text-green-500", bg: "bg-green-50" },
-    { label: "In Progress", value: myInProgress, icon: Clock, color: "text-indigo-500", bg: "bg-indigo-50" },
-    { label: "Pending", value: myPending, icon: AlertTriangle, color: "text-yellow-500", bg: "bg-yellow-50" },
+    { label: "My Tasks", value: stats.total, icon: ClipboardList, color: "text-blue-500", bg: "bg-blue-50" },
+    { label: "Completed", value: stats.completed, icon: CheckCircle2, color: "text-green-500", bg: "bg-green-50" },
+    { label: "In Progress", value: stats.inProgress, icon: Clock, color: "text-indigo-500", bg: "bg-indigo-50" },
+    { label: "Pending", value: stats.pending, icon: AlertTriangle, color: "text-yellow-500", bg: "bg-yellow-50" },
   ];
 
   const uploadFiles = async (files: File[]): Promise<IAttachment[]> => {
@@ -129,11 +134,11 @@ export default function PortalPage() {
     }
   };
 
+  const hasFilters = search || filter || filterDates;
+
   const clearFilters = () => {
-    setSearch("");
-    setFilter("");
-    setFilterDate("");
-    setPage(1);
+    setSearchInput("");
+    filters.clear();
   };
 
   return (
@@ -176,11 +181,11 @@ export default function PortalPage() {
               type="text"
               placeholder="Search tasks..."
               className="input-field pl-9"
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              value={searchInput}
+              onChange={(e) => { setSearchInput(e.target.value); filters.setDebounced({ search: e.target.value }); }}
             />
           </div>
-          {(search || filter || filterDate) && (
+          {hasFilters && (
             <button onClick={clearFilters} className="text-sm text-red-500 hover:text-red-700">
               Clear filters
             </button>
@@ -197,7 +202,7 @@ export default function PortalPage() {
           ].map((tab) => (
             <button
               key={tab.value}
-              onClick={() => { setFilter(tab.value); setPage(1); }}
+              onClick={() => filters.set({ status: tab.value })}
               className={cn(
                 "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
                 filter === tab.value
@@ -210,11 +215,9 @@ export default function PortalPage() {
           ))}
 
           <div className="ml-auto">
-            <input
-              type="date"
-              className="input-field w-auto text-sm"
-              value={filterDate}
-              onChange={(e) => { setFilterDate(e.target.value); setPage(1); }}
+            <MultiDatePicker
+              selectedDates={filterDates ? filterDates.split(",") : []}
+              onChange={(dates) => filters.set({ dates: dates.join(",") })}
             />
           </div>
         </div>
@@ -228,7 +231,7 @@ export default function PortalPage() {
           </div>
         ) : tasks.length === 0 ? (
           <div className="text-center py-12 text-gray-500 text-sm">
-            {search || filter || filterDate ? "No tasks found for this filter" : "No tasks assigned to you yet"}
+            {hasFilters ? "No tasks found for this filter" : "No tasks assigned to you yet"}
           </div>
         ) : (
           <table className="w-full">
@@ -406,5 +409,13 @@ export default function PortalPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function PortalPage() {
+  return (
+    <Suspense>
+      <PortalPageContent />
+    </Suspense>
   );
 }

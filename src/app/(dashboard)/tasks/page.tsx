@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import {
   Plus,
   Search,
-  Filter,
   Trash2,
   Check,
   X,
@@ -16,13 +15,14 @@ import {
   Loader2,
   Images,
   FileSpreadsheet,
-  Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTasks } from "@/hooks/useTasks";
 import { useDevelopers } from "@/hooks/useDevelopers";
+import { useFilterParams } from "@/hooks/useFilterParams";
 import { cn, formatDate, apiError } from "@/lib/utils";
 import { ITask, IAttachment, STATUS_OPTIONS, PRIORITY_OPTIONS } from "@/types";
+import MultiDatePicker from "@/components/MultiDatePicker";
 
 const statusColors: Record<string, string> = {
   Pending: "bg-yellow-100 text-yellow-700 border-yellow-200",
@@ -36,15 +36,21 @@ const priorityColors: Record<string, string> = {
   High: "bg-red-100 text-red-700 border-red-200",
 };
 
-export default function TasksPage() {
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState("");
-  const [filterPriority, setFilterPriority] = useState("");
-  const [filterAssignee, setFilterAssignee] = useState("");
-  const [sortBy, setSortBy] = useState("date");
-  const [sortOrder, setSortOrder] = useState("desc");
-  const [filterDate, setFilterDate] = useState("");
+function TasksPageContent() {
+  const filters = useFilterParams({ sortBy: "date", sortOrder: "desc" });
+
+  const page = parseInt(filters.get("page")) || 1;
+  const search = filters.get("search");
+  const filterStatus = filters.get("status");
+  const filterPriority = filters.get("priority");
+  const filterAssignee = filters.get("assignee");
+  const sortBy = filters.get("sortBy") || "date";
+  const sortOrder = filters.get("sortOrder") || "desc";
+  const filterDates = filters.get("dates");
+
+  const [searchInput, setSearchInput] = useState(search);
+  const setPage = (p: number) => filters.set({ page: String(p) }, false);
+
   const [editingCell, setEditingCell] = useState<{
     id: string;
     field: string;
@@ -77,17 +83,16 @@ export default function TasksPage() {
   if (filterStatus) params.status = filterStatus;
   if (filterPriority) params.priority = filterPriority;
   if (filterAssignee) params.assignee = filterAssignee;
-  if (filterDate) { params.dateFrom = filterDate; params.dateTo = filterDate; }
+  if (filterDates) params.dates = filterDates;
 
   const { tasks, total, totalPages, isLoading, mutate } = useTasks(params);
   const { developers } = useDevelopers();
 
   const handleSort = (field: string) => {
     if (sortBy === field) {
-      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+      filters.set({ sortOrder: sortOrder === "asc" ? "desc" : "asc" }, false);
     } else {
-      setSortBy(field);
-      setSortOrder("asc");
+      filters.set({ sortBy: field, sortOrder: "asc" }, false);
     }
   };
 
@@ -287,13 +292,11 @@ export default function TasksPage() {
     }
   };
 
+  const hasFilters = filterStatus || filterPriority || filterAssignee || filterDates || search;
+
   const clearFilters = () => {
-    setFilterStatus("");
-    setFilterPriority("");
-    setFilterAssignee("");
-    setFilterDate("");
-    setSearch("");
-    setPage(1);
+    setSearchInput("");
+    filters.clear();
   };
 
   return (
@@ -331,14 +334,14 @@ export default function TasksPage() {
               type="text"
               placeholder="Search tasks..."
               className="input-field pl-9"
-              value={search}
+              value={searchInput}
               onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
+                setSearchInput(e.target.value);
+                filters.setDebounced({ search: e.target.value });
               }}
             />
           </div>
-          {(filterStatus || filterPriority || filterAssignee || filterDate) && (
+          {hasFilters && (
             <button
               onClick={clearFilters}
               className="text-sm text-red-500 hover:text-red-700"
@@ -352,10 +355,7 @@ export default function TasksPage() {
             <select
               className="select-field w-auto"
               value={filterStatus}
-              onChange={(e) => {
-                setFilterStatus(e.target.value);
-                setPage(1);
-              }}
+              onChange={(e) => filters.set({ status: e.target.value })}
             >
               <option value="">All Status</option>
               {STATUS_OPTIONS.map((s) => (
@@ -367,10 +367,7 @@ export default function TasksPage() {
             <select
               className="select-field w-auto"
               value={filterPriority}
-              onChange={(e) => {
-                setFilterPriority(e.target.value);
-                setPage(1);
-              }}
+              onChange={(e) => filters.set({ priority: e.target.value })}
             >
               <option value="">All Priority</option>
               {PRIORITY_OPTIONS.map((p) => (
@@ -382,12 +379,10 @@ export default function TasksPage() {
             <select
               className="select-field w-auto"
               value={filterAssignee}
-              onChange={(e) => {
-                setFilterAssignee(e.target.value);
-                setPage(1);
-              }}
+              onChange={(e) => filters.set({ assignee: e.target.value })}
             >
               <option value="">All Developers</option>
+              <option value="unassigned">Unassigned</option>
               {developers.map((d) => (
                 <option key={d._id} value={d._id}>
                   {d.name}
@@ -395,11 +390,9 @@ export default function TasksPage() {
               ))}
             </select>
 
-            <input
-              type="date"
-              className="input-field w-auto text-sm"
-              value={filterDate}
-              onChange={(e) => { setFilterDate(e.target.value); setPage(1); }}
+            <MultiDatePicker
+              selectedDates={filterDates ? filterDates.split(",") : []}
+              onChange={(dates) => filters.set({ dates: dates.join(",") })}
             />
           </div>
       </div>
@@ -1169,5 +1162,13 @@ export default function TasksPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function TasksPage() {
+  return (
+    <Suspense>
+      <TasksPageContent />
+    </Suspense>
   );
 }

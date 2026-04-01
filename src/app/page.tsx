@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, Suspense } from "react";
 import {
   ClipboardList,
   CheckCircle2,
@@ -12,19 +11,19 @@ import {
   ChevronRight,
   ArrowUpDown,
   Search,
-  Filter,
   Paperclip,
   X,
   Images,
-  FolderKanban,
 } from "lucide-react";
 import { useTaskStats, useTasks } from "@/hooks/useTasks";
 import { useDevelopers } from "@/hooks/useDevelopers";
 import { useAuth } from "@/hooks/useAuth";
+import { useFilterParams } from "@/hooks/useFilterParams";
 import { cn, formatDate } from "@/lib/utils";
 import { ITask, IAttachment, STATUS_OPTIONS, PRIORITY_OPTIONS } from "@/types";
 import Sidebar from "@/components/layout/Sidebar";
 import TopNav from "@/components/layout/TopNav";
+import MultiDatePicker from "@/components/MultiDatePicker";
 
 const statusColors: Record<string, string> = {
   Pending: "bg-yellow-100 text-yellow-700 border-yellow-200",
@@ -38,22 +37,26 @@ const priorityColors: Record<string, string> = {
   High: "bg-red-100 text-red-700 border-red-200",
 };
 
-export default function HomePage() {
+function HomePageContent() {
   const { isAuthenticated, isAdmin, isLoading: authLoading } = useAuth();
   const { stats, isLoading: statsLoading } = useTaskStats();
   const { developers } = useDevelopers();
-  const router = useRouter();
+  const filters = useFilterParams({ sortBy: "date", sortOrder: "desc" });
 
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState("");
-  const [filterPriority, setFilterPriority] = useState("");
-  const [filterAssignee, setFilterAssignee] = useState("");
-  const [sortBy, setSortBy] = useState("date");
-  const [sortOrder, setSortOrder] = useState("desc");
-  const [filterDate, setFilterDate] = useState("");
+  const page = parseInt(filters.get("page")) || 1;
+  const search = filters.get("search");
+  const filterStatus = filters.get("status");
+  const filterPriority = filters.get("priority");
+  const filterAssignee = filters.get("assignee");
+  const sortBy = filters.get("sortBy") || "date";
+  const sortOrder = filters.get("sortOrder") || "desc";
+  const filterDates = filters.get("dates");
+
+  const [searchInput, setSearchInput] = useState(search);
   const [attachmentModal, setAttachmentModal] = useState<ITask | null>(null);
   const [lightboxImage, setLightboxImage] = useState<IAttachment | null>(null);
+
+  const setPage = (p: number) => filters.set({ page: String(p) }, false);
 
   const params: Record<string, string> = {
     page: String(page),
@@ -65,7 +68,7 @@ export default function HomePage() {
   if (filterStatus) params.status = filterStatus;
   if (filterPriority) params.priority = filterPriority;
   if (filterAssignee) params.assignee = filterAssignee;
-  if (filterDate) { params.dateFrom = filterDate; params.dateTo = filterDate; }
+  if (filterDates) params.dates = filterDates;
 
   const { tasks, total, totalPages, isLoading } = useTasks(params);
 
@@ -74,20 +77,17 @@ export default function HomePage() {
 
   const handleSort = (field: string) => {
     if (sortBy === field) {
-      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+      filters.set({ sortOrder: sortOrder === "asc" ? "desc" : "asc" }, false);
     } else {
-      setSortBy(field);
-      setSortOrder("asc");
+      filters.set({ sortBy: field, sortOrder: "asc" }, false);
     }
   };
 
+  const hasFilters = filterStatus || filterPriority || filterAssignee || filterDates || search;
+
   const clearFilters = () => {
-    setFilterStatus("");
-    setFilterPriority("");
-    setFilterAssignee("");
-    setFilterDate("");
-    setSearch("");
-    setPage(1);
+    setSearchInput("");
+    filters.clear();
   };
 
   const statCards = [
@@ -130,11 +130,11 @@ export default function HomePage() {
               type="text"
               placeholder="Search tasks..."
               className="input-field pl-9"
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              value={searchInput}
+              onChange={(e) => { setSearchInput(e.target.value); filters.setDebounced({ search: e.target.value }); }}
             />
           </div>
-          {(filterStatus || filterPriority || filterAssignee || filterDate) && (
+          {hasFilters && (
             <button onClick={clearFilters} className="text-sm text-red-500 hover:text-red-700">
               Clear filters
             </button>
@@ -142,20 +142,24 @@ export default function HomePage() {
         </div>
 
           <div className="flex items-center gap-3 flex-wrap">
-            <select className="select-field w-auto" value={filterStatus} onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }}>
+            <select className="select-field w-auto" value={filterStatus} onChange={(e) => filters.set({ status: e.target.value })}>
               <option value="">All Status</option>
               {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
-            <select className="select-field w-auto" value={filterPriority} onChange={(e) => { setFilterPriority(e.target.value); setPage(1); }}>
+            <select className="select-field w-auto" value={filterPriority} onChange={(e) => filters.set({ priority: e.target.value })}>
               <option value="">All Priority</option>
               {PRIORITY_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
-            <select className="select-field w-auto" value={filterAssignee} onChange={(e) => { setFilterAssignee(e.target.value); setPage(1); }}>
+            <select className="select-field w-auto" value={filterAssignee} onChange={(e) => filters.set({ assignee: e.target.value })}>
               <option value="">All Developers</option>
+              <option value="unassigned">Unassigned</option>
               {developers.map((d) => <option key={d._id} value={d._id}>{d.name}</option>)}
             </select>
 
-            <input type="date" className="input-field w-auto text-sm" value={filterDate} onChange={(e) => { setFilterDate(e.target.value); setPage(1); }} />
+            <MultiDatePicker
+              selectedDates={filterDates ? filterDates.split(",") : []}
+              onChange={(dates) => filters.set({ dates: dates.join(",") })}
+            />
           </div>
       </div>
 
@@ -364,5 +368,13 @@ export default function HomePage() {
         {content}
       </main>
     </div>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense>
+      <HomePageContent />
+    </Suspense>
   );
 }
