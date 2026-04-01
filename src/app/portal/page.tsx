@@ -193,26 +193,41 @@ function PortalPageContent() {
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
-          {/* Status Tabs */}
+          {/* Status Tabs - multi-select toggle */}
           {[
             { label: "All", value: "" },
             { label: "Pending", value: "Pending" },
             { label: "In Progress", value: "In Progress" },
             { label: "Completed", value: "Completed" },
-          ].map((tab) => (
-            <button
-              key={tab.value}
-              onClick={() => filters.set({ status: tab.value })}
-              className={cn(
-                "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
-                filter === tab.value
-                  ? "bg-brand text-white"
-                  : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
+          ].map((tab) => {
+            const selected = filter ? filter.split(",") : [];
+            const isAll = tab.value === "";
+            const isActive = isAll ? selected.length === 0 : selected.includes(tab.value);
+
+            return (
+              <button
+                key={tab.value}
+                onClick={() => {
+                  if (isAll) {
+                    filters.set({ status: "" });
+                  } else {
+                    const next = isActive
+                      ? selected.filter((s) => s !== tab.value)
+                      : [...selected, tab.value];
+                    filters.set({ status: next.join(",") });
+                  }
+                }}
+                className={cn(
+                  "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
+                  isActive
+                    ? "bg-brand text-white"
+                    : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
+                )}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
 
           <div className="ml-auto">
             <MultiDatePicker

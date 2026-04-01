@@ -22,23 +22,42 @@ export async function GET(req: NextRequest) {
     const dateTo = searchParams.get("dateTo") || "";
     const dates = searchParams.get("dates") || ""; // comma-separated: "2026-04-20,2026-04-21"
 
-    const filter: Record<string, unknown> = {};
+    // Build filter using $and to avoid $or conflicts
+    const conditions: Record<string, unknown>[] = [];
 
     if (search) {
-      filter.$or = [
-        { title: { $regex: search, $options: "i" } },
-        { description: { $regex: search, $options: "i" } },
-      ];
-    }
-    if (status) filter.status = status;
-    if (priority) filter.priority = priority;
-    if (assignee === "unassigned") {
-      filter.assignee = null;
-    } else if (assignee) {
-      filter.assignee = assignee;
+      conditions.push({
+        $or: [
+          { title: { $regex: search, $options: "i" } },
+          { description: { $regex: search, $options: "i" } },
+        ],
+      });
     }
 
-    // Multi-date filter: each date becomes a day range
+    if (status) {
+      const statuses = status.split(",").filter(Boolean);
+      conditions.push({ status: statuses.length === 1 ? statuses[0] : { $in: statuses } });
+    }
+
+    if (priority) {
+      const priorities = priority.split(",").filter(Boolean);
+      conditions.push({ priority: priorities.length === 1 ? priorities[0] : { $in: priorities } });
+    }
+
+    if (assignee) {
+      const assignees = assignee.split(",").filter(Boolean);
+      const hasUnassigned = assignees.includes("unassigned");
+      const ids = assignees.filter((a) => a !== "unassigned");
+
+      if (hasUnassigned && ids.length === 0) {
+        conditions.push({ assignee: null });
+      } else if (hasUnassigned && ids.length > 0) {
+        conditions.push({ $or: [{ assignee: null }, { assignee: { $in: ids } }] });
+      } else {
+        conditions.push({ assignee: ids.length === 1 ? ids[0] : { $in: ids } });
+      }
+    }
+
     if (dates) {
       const dateConditions = dates.split(",").filter(Boolean).map((d) => {
         const from = new Date(d);
@@ -48,19 +67,9 @@ export async function GET(req: NextRequest) {
         return { date: { $gte: from, $lte: to } };
       });
       if (dateConditions.length === 1) {
-        filter.date = dateConditions[0].date;
+        conditions.push(dateConditions[0]);
       } else if (dateConditions.length > 1) {
-        // Merge with existing $or if search is also present
-        if (filter.$or) {
-          const searchOr = filter.$or;
-          delete filter.$or;
-          filter.$and = [
-            { $or: searchOr as Record<string, unknown>[] },
-            { $or: dateConditions },
-          ];
-        } else {
-          filter.$or = dateConditions;
-        }
+        conditions.push({ $or: dateConditions });
       }
     } else if (dateFrom || dateTo) {
       const dateFilter: Record<string, Date> = {};
@@ -74,8 +83,10 @@ export async function GET(req: NextRequest) {
         to.setHours(23, 59, 59, 999);
         dateFilter.$lte = to;
       }
-      filter.date = dateFilter;
+      conditions.push({ date: dateFilter });
     }
+
+    const filter = conditions.length > 0 ? { $and: conditions } : {};
 
     const sort: Record<string, 1 | -1> = {
       [sortBy]: sortOrder === "asc" ? 1 : -1,

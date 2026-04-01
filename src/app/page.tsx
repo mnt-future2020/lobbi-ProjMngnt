@@ -24,6 +24,7 @@ import { ITask, IAttachment, STATUS_OPTIONS, PRIORITY_OPTIONS } from "@/types";
 import Sidebar from "@/components/layout/Sidebar";
 import TopNav from "@/components/layout/TopNav";
 import MultiDatePicker from "@/components/MultiDatePicker";
+import MultiSelect from "@/components/MultiSelect";
 
 const statusColors: Record<string, string> = {
   Pending: "bg-yellow-100 text-yellow-700 border-yellow-200",
@@ -142,19 +143,27 @@ function HomePageContent() {
         </div>
 
           <div className="flex items-center gap-3 flex-wrap">
-            <select className="select-field w-auto" value={filterStatus} onChange={(e) => filters.set({ status: e.target.value })}>
-              <option value="">All Status</option>
-              {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <select className="select-field w-auto" value={filterPriority} onChange={(e) => filters.set({ priority: e.target.value })}>
-              <option value="">All Priority</option>
-              {PRIORITY_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
-            </select>
-            <select className="select-field w-auto" value={filterAssignee} onChange={(e) => filters.set({ assignee: e.target.value })}>
-              <option value="">All Developers</option>
-              <option value="unassigned">Unassigned</option>
-              {developers.map((d) => <option key={d._id} value={d._id}>{d.name}</option>)}
-            </select>
+            <MultiSelect
+              placeholder="All Status"
+              options={STATUS_OPTIONS.map((s) => ({ value: s, label: s }))}
+              selected={filterStatus ? filterStatus.split(",") : []}
+              onChange={(v) => filters.set({ status: v.join(",") })}
+            />
+            <MultiSelect
+              placeholder="All Priority"
+              options={PRIORITY_OPTIONS.map((p) => ({ value: p, label: p }))}
+              selected={filterPriority ? filterPriority.split(",") : []}
+              onChange={(v) => filters.set({ priority: v.join(",") })}
+            />
+            <MultiSelect
+              placeholder="All Developers"
+              options={[
+                { value: "unassigned", label: "Unassigned" },
+                ...developers.map((d) => ({ value: d._id, label: d.name })),
+              ]}
+              selected={filterAssignee ? filterAssignee.split(",") : []}
+              onChange={(v) => filters.set({ assignee: v.join(",") })}
+            />
 
             <MultiDatePicker
               selectedDates={filterDates ? filterDates.split(",") : []}
