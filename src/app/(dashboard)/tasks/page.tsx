@@ -57,9 +57,10 @@ function TasksPageContent() {
     field: string;
   } | null>(null);
   const [editValue, setEditValue] = useState("");
-  const [showAddRow, setShowAddRow] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
   const [newTask, setNewTask] = useState({
     title: "",
+    description: "",
     status: "Pending",
     priority: "Medium",
     assignee: "",
@@ -170,6 +171,7 @@ function TasksPageContent() {
       setUploading("new");
       const body: Record<string, unknown> = {
         title: newTask.title,
+        description: newTask.description,
         status: newTask.status,
         priority: newTask.priority,
         date: newTask.date,
@@ -177,7 +179,6 @@ function TasksPageContent() {
       if (newTask.assignee) body.assignee = newTask.assignee;
       if (newTask.dueDate) body.dueDate = newTask.dueDate;
 
-      // Upload attachments if any
       if (newTaskFiles.length > 0) {
         body.attachments = await uploadFiles(newTaskFiles);
       }
@@ -189,9 +190,10 @@ function TasksPageContent() {
       });
       if (!res.ok) throw new Error(await apiError(res, "Failed to create task"));
       toast.success("Task created");
-      setShowAddRow(false);
+      setShowAddModal(false);
       setNewTask({
         title: "",
+        description: "",
         status: "Pending",
         priority: "Medium",
         assignee: "",
@@ -317,7 +319,7 @@ function TasksPageContent() {
             <span className="hidden sm:inline">Import</span>
           </button>
           <button
-            onClick={() => setShowAddRow(true)}
+            onClick={() => setShowAddModal(true)}
             className="btn-primary flex items-center gap-2 text-xs sm:text-sm"
           >
             <Plus className="w-4 h-4" />
@@ -416,171 +418,6 @@ function TasksPageContent() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {/* Add New Task Row */}
-              {showAddRow && (
-                <tr className="bg-brand/5">
-                  <td className="px-4 py-2">
-                    <input
-                      type="date"
-                      className="input-field text-xs"
-                      value={newTask.date}
-                      onChange={(e) =>
-                        setNewTask({ ...newTask, date: e.target.value })
-                      }
-                    />
-                  </td>
-                  <td className="px-4 py-2">
-                    <input
-                      type="text"
-                      placeholder="Task name..."
-                      className="input-field text-sm"
-                      value={newTask.title}
-                      onChange={(e) =>
-                        setNewTask({ ...newTask, title: e.target.value })
-                      }
-                      onKeyDown={(e) => e.key === "Enter" && addTask()}
-                      autoFocus
-                    />
-                  </td>
-                  <td className="px-4 py-2">
-                    <select
-                      className="select-field text-sm"
-                      value={newTask.assignee}
-                      onChange={(e) =>
-                        setNewTask({ ...newTask, assignee: e.target.value })
-                      }
-                    >
-                      <option value="">Select Developer</option>
-                      {developers.map((d) => (
-                        <option key={d._id} value={d._id}>
-                          {d.name}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-4 py-2">
-                    <select
-                      className="select-field text-sm"
-                      value={newTask.status}
-                      onChange={(e) =>
-                        setNewTask({ ...newTask, status: e.target.value })
-                      }
-                    >
-                      {STATUS_OPTIONS.map((s) => (
-                        <option key={s} value={s}>
-                          {s}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-4 py-2">
-                    <select
-                      className="select-field text-sm"
-                      value={newTask.priority}
-                      onChange={(e) =>
-                        setNewTask({ ...newTask, priority: e.target.value })
-                      }
-                    >
-                      {PRIORITY_OPTIONS.map((p) => (
-                        <option key={p} value={p}>
-                          {p}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-4 py-2">
-                    <input
-                      type="date"
-                      className="input-field text-xs"
-                      value={newTask.dueDate}
-                      onChange={(e) =>
-                        setNewTask({ ...newTask, dueDate: e.target.value })
-                      }
-                    />
-                  </td>
-                  {/* Attachment in Add Row */}
-                  <td className="px-4 py-2">
-                    <div className="flex items-center gap-2">
-                      <label className="cursor-pointer p-1.5 text-gray-400 hover:text-brand hover:bg-gray-100 rounded transition-colors">
-                        <input
-                          type="file"
-                          accept="image/*"
-                          multiple
-                          className="hidden"
-                          onChange={(e) => {
-                            if (e.target.files) {
-                              setNewTaskFiles((prev) => [
-                                ...prev,
-                                ...Array.from(e.target.files!),
-                              ]);
-                            }
-                          }}
-                        />
-                        <Images className="w-4 h-4" />
-                      </label>
-                      {newTaskFiles.length > 0 && (
-                        <span className="text-xs text-brand font-medium">
-                          {newTaskFiles.length} file
-                          {newTaskFiles.length > 1 ? "s" : ""}
-                        </span>
-                      )}
-                    </div>
-                    {/* Preview thumbnails */}
-                    {newTaskFiles.length > 0 && (
-                      <div className="flex gap-1 mt-1 flex-wrap">
-                        {newTaskFiles.map((f, i) => (
-                          <div
-                            key={i}
-                            className="relative w-8 h-8 rounded border border-gray-200 overflow-hidden group/thumb"
-                          >
-                            <img
-                              src={URL.createObjectURL(f)}
-                              alt={f.name}
-                              className="w-full h-full object-cover"
-                            />
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setNewTaskFiles((prev) =>
-                                  prev.filter((_, idx) => idx !== i)
-                                )
-                              }
-                              className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity"
-                            >
-                              <X className="w-3 h-3 text-white" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-4 py-2 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <button
-                        onClick={addTask}
-                        disabled={uploading === "new"}
-                        className="p-1.5 text-green-600 hover:bg-green-50 rounded disabled:opacity-50"
-                      >
-                        {uploading === "new" ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <Check className="w-4 h-4" />
-                        )}
-                      </button>
-                      <button
-                        onClick={() => {
-                          setShowAddRow(false);
-                          setNewTaskFiles([]);
-                        }}
-                        className="p-1.5 text-red-500 hover:bg-red-50 rounded"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              )}
-
               {/* Loading */}
               {isLoading ? (
                 <tr>
@@ -1142,6 +979,157 @@ function TasksPageContent() {
                 )}
                 {importing ? "Importing..." : "Import"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Task Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowAddModal(false)}>
+          <div className="bg-white rounded-xl p-6 w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-semibold text-gray-900">Create New Task</h2>
+              <button onClick={() => setShowAddModal(false)} className="p-1 hover:bg-gray-100 rounded"><X className="w-5 h-5" /></button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Task Name *</label>
+                <input
+                  type="text"
+                  className="input-field"
+                  placeholder="What needs to be done?"
+                  value={newTask.title}
+                  onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <textarea
+                  className="input-field min-h-[80px] resize-none"
+                  placeholder="Add details..."
+                  value={newTask.description}
+                  onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                  <input
+                    type="date"
+                    className="input-field"
+                    value={newTask.date}
+                    onChange={(e) => setNewTask({ ...newTask, date: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
+                  <input
+                    type="date"
+                    className="input-field"
+                    value={newTask.dueDate}
+                    onChange={(e) => setNewTask({ ...newTask, dueDate: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Developer</label>
+                <select
+                  className="select-field"
+                  value={newTask.assignee}
+                  onChange={(e) => setNewTask({ ...newTask, assignee: e.target.value })}
+                >
+                  <option value="">Select Developer</option>
+                  {developers.map((d) => (
+                    <option key={d._id} value={d._id}>{d.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                  <select
+                    className="select-field"
+                    value={newTask.status}
+                    onChange={(e) => setNewTask({ ...newTask, status: e.target.value })}
+                  >
+                    {STATUS_OPTIONS.map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+                  <select
+                    className="select-field"
+                    value={newTask.priority}
+                    onChange={(e) => setNewTask({ ...newTask, priority: e.target.value })}
+                  >
+                    {PRIORITY_OPTIONS.map((p) => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Attachments</label>
+                <label className="flex items-center justify-center gap-2 border-2 border-dashed border-gray-300 rounded-lg py-4 cursor-pointer hover:border-brand hover:bg-brand/5 transition-colors">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files) {
+                        setNewTaskFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
+                      }
+                    }}
+                  />
+                  <Upload className="w-4 h-4 text-gray-400" />
+                  <span className="text-sm text-gray-500">Click to upload images</span>
+                </label>
+                {newTaskFiles.length > 0 && (
+                  <div className="flex gap-2 mt-2 flex-wrap">
+                    {newTaskFiles.map((f, i) => (
+                      <div key={i} className="relative w-14 h-14 rounded-lg border border-gray-200 overflow-hidden group/thumb">
+                        <img src={URL.createObjectURL(f)} alt={f.name} className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setNewTaskFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                          className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity"
+                        >
+                          <X className="w-4 h-4 text-white" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setShowAddModal(false); setNewTaskFiles([]); }}
+                  className="btn-secondary flex-1"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={addTask}
+                  disabled={uploading === "new"}
+                  className="btn-primary flex-1 flex items-center justify-center gap-2"
+                >
+                  {uploading === "new" && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Create Task
+                </button>
+              </div>
             </div>
           </div>
         </div>
