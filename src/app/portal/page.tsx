@@ -24,6 +24,8 @@ import { TaskStats } from "@/types";
 import { cn, formatDate, apiError } from "@/lib/utils";
 import { ITask, IAttachment } from "@/types";
 import MultiDatePicker from "@/components/MultiDatePicker";
+import ProjectSelector from "@/components/ProjectSelector";
+import { useProjectContext } from "@/contexts/ProjectContext";
 
 const statusColors: Record<string, string> = {
   Pending: "bg-yellow-100 text-yellow-700",
@@ -39,6 +41,7 @@ const priorityColors: Record<string, string> = {
 
 function PortalPageContent() {
   const { user } = useAuth();
+  const { selectedProject } = useProjectContext();
   const filters = useFilterParams();
 
   const page = parseInt(filters.get("page")) || 1;
@@ -63,6 +66,7 @@ function PortalPageContent() {
     sortBy: "date",
     sortOrder: "desc",
   };
+  if (selectedProject) params.project = selectedProject._id;
   if (user?._id && !user?.isAdmin) params.assignee = user._id;
   if (search) params.search = search;
   if (filter) params.status = filter;
@@ -70,9 +74,9 @@ function PortalPageContent() {
 
   const { tasks, total, totalPages, isLoading, mutate } = useTasks(params);
 
-  // Fetch accurate stats from API scoped to this developer
+  // Fetch accurate stats from API scoped to this developer and project
   const assigneeId = user?._id && !user?.isAdmin ? user._id : undefined;
-  const { stats, isLoading: statsLoading } = useTaskStats(assigneeId);
+  const { stats, isLoading: statsLoading } = useTaskStats(assigneeId, selectedProject?._id);
 
   const statCards = [
     { label: "My Tasks", value: stats.total, icon: ClipboardList, color: "text-blue-500", bg: "bg-blue-50" },
@@ -101,6 +105,11 @@ function PortalPageContent() {
       return;
     }
 
+    if (!selectedProject) {
+      toast.error("Please select a project first");
+      return;
+    }
+
     setCreating(true);
     try {
       const body: Record<string, unknown> = {
@@ -109,6 +118,7 @@ function PortalPageContent() {
         priority: "Medium",
         status: "Pending",
         assignee: user?._id,
+        project: selectedProject._id,
         date: new Date().toISOString(),
       };
 
@@ -143,16 +153,19 @@ function PortalPageContent() {
 
   return (
     <div className="space-y-6">
-      {/* Welcome + Create Button */}
+      {/* Welcome + Project Selector + Create Button */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl lg:text-2xl font-bold text-gray-900">Welcome, {user?.name}!</h1>
           <p className="text-sm text-gray-500 mt-1">Here are your assigned tasks</p>
         </div>
-        <button onClick={() => setShowCreateModal(true)} className="btn-primary flex items-center gap-2">
-          <Plus className="w-4 h-4" />
-          Create Task
-        </button>
+        <div className="flex items-center gap-3">
+          <ProjectSelector />
+          <button onClick={() => setShowCreateModal(true)} className="btn-primary flex items-center gap-2">
+            <Plus className="w-4 h-4" />
+            Create Task
+          </button>
+        </div>
       </div>
 
       {/* Stats */}

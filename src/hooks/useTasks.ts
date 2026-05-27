@@ -28,10 +28,12 @@ export function useTasks(params: Record<string, string> = {}) {
   };
 }
 
-export function useTaskStats(assignee?: string) {
-  const url = assignee
-    ? `/api/tasks/stats?assignee=${assignee}`
-    : "/api/tasks/stats";
+export function useTaskStats(assignee?: string, project?: string) {
+  const params = new URLSearchParams();
+  if (assignee) params.set("assignee", assignee);
+  if (project) params.set("project", project);
+  const url = `/api/tasks/stats?${params.toString()}`;
+
   const { data, error, isLoading, mutate } = useSWR<TaskStats>(
     url,
     fetcher,

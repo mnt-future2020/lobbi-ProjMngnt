@@ -11,11 +11,15 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const assignee = searchParams.get("assignee") || "";
+    const project = searchParams.get("project") || "";
 
-    // Build match stage for optional assignee filter
+    // Build match stage for optional filters
     const matchStage: Record<string, unknown> = {};
     if (assignee) {
       matchStage.assignee = new mongoose.Types.ObjectId(assignee);
+    }
+    if (project) {
+      matchStage.project = new mongoose.Types.ObjectId(project);
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

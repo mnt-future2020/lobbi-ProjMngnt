@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   ClipboardList,
   Users,
+  FolderKanban,
   LogIn,
   Menu,
   X,
@@ -22,6 +23,7 @@ const adminItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/tasks", label: "Tasks", icon: ClipboardList },
   { href: "/developers", label: "Developers", icon: Users },
+  { href: "/projects", label: "Projects", icon: FolderKanban },
 ];
 
 export default function Sidebar() {

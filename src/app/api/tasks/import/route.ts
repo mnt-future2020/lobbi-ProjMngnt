@@ -10,9 +10,14 @@ export async function POST(req: NextRequest) {
 
     const formData = await req.formData();
     const file = formData.get("file") as File;
+    const projectId = formData.get("project") as string;
 
     if (!file) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
+    }
+
+    if (!projectId) {
+      return NextResponse.json({ error: "Project is required" }, { status: 400 });
     }
 
     const bytes = await file.arrayBuffer();
@@ -143,6 +148,7 @@ export async function POST(req: NextRequest) {
         status: statusMap[rawStatus] || (validStatuses.includes(row[statusCol!]) ? row[statusCol!] : "Pending"),
         priority: priorityMap[rawPriority] || (validPriorities.includes(row[priorityCol!]) ? row[priorityCol!] : "Medium"),
         assignee: resolveDeveloper(rawDev) || null,
+        project: projectId,
         date: parseDate(rawDate) || new Date(),
         dueDate: parseDate(rawDue) || null,
       });

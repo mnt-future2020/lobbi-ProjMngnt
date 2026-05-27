@@ -25,6 +25,8 @@ import Sidebar from "@/components/layout/Sidebar";
 import TopNav from "@/components/layout/TopNav";
 import MultiDatePicker from "@/components/MultiDatePicker";
 import MultiSelect from "@/components/MultiSelect";
+import ProjectSelector from "@/components/ProjectSelector";
+import { useProjectContext } from "@/contexts/ProjectContext";
 
 const statusColors: Record<string, string> = {
   Pending: "bg-yellow-100 text-yellow-700 border-yellow-200",
@@ -40,8 +42,15 @@ const priorityColors: Record<string, string> = {
 
 function HomePageContent() {
   const { isAuthenticated, isAdmin, isLoading: authLoading } = useAuth();
-  const { stats, isLoading: statsLoading } = useTaskStats();
-  const { developers } = useDevelopers();
+  const { selectedProject } = useProjectContext();
+  const { stats, isLoading: statsLoading } = useTaskStats(undefined, selectedProject?._id);
+  const { developers: allDevelopers } = useDevelopers();
+
+  // Show only project members in filter dropdowns
+  const projectMembers = selectedProject?.members;
+  const developers = projectMembers && projectMembers.length > 0
+    ? (projectMembers as import("@/types").IDeveloper[])
+    : allDevelopers;
   const filters = useFilterParams({ sortBy: "date", sortOrder: "desc" });
 
   const page = parseInt(filters.get("page")) || 1;
@@ -65,6 +74,7 @@ function HomePageContent() {
     sortBy,
     sortOrder,
   };
+  if (selectedProject) params.project = selectedProject._id;
   if (search) params.search = search;
   if (filterStatus) params.status = filterStatus;
   if (filterPriority) params.priority = filterPriority;
@@ -370,7 +380,8 @@ function HomePageContent() {
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b border-gray-200 sticky top-0 z-20">
         <div className="max-w-7xl mx-auto px-4 lg:px-6 py-3 flex items-center justify-between">
-          <img src="/logo.png" alt="LOBBI" className="h-8 sm:h-10 object-contain" />
+          <img src="/logo2.png" alt="LOBBI" className="h-8 sm:h-10 object-contain" />
+          <ProjectSelector />
         </div>
       </header>
       <main className="max-w-7xl mx-auto px-4 lg:px-6 py-4 lg:py-6">

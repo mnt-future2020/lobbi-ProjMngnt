@@ -24,6 +24,7 @@ import { cn, formatDate, apiError } from "@/lib/utils";
 import { ITask, IAttachment, STATUS_OPTIONS, PRIORITY_OPTIONS } from "@/types";
 import MultiDatePicker from "@/components/MultiDatePicker";
 import MultiSelect from "@/components/MultiSelect";
+import { useProjectContext } from "@/contexts/ProjectContext";
 
 const statusColors: Record<string, string> = {
   Pending: "bg-yellow-100 text-yellow-700 border-yellow-200",
@@ -38,6 +39,7 @@ const priorityColors: Record<string, string> = {
 };
 
 function TasksPageContent() {
+  const { selectedProject } = useProjectContext();
   const filters = useFilterParams({ sortBy: "date", sortOrder: "desc" });
 
   const page = parseInt(filters.get("page")) || 1;
@@ -81,6 +83,7 @@ function TasksPageContent() {
     sortBy,
     sortOrder,
   };
+  if (selectedProject) params.project = selectedProject._id;
   if (search) params.search = search;
   if (filterStatus) params.status = filterStatus;
   if (filterPriority) params.priority = filterPriority;
@@ -88,7 +91,13 @@ function TasksPageContent() {
   if (filterDates) params.dates = filterDates;
 
   const { tasks, total, totalPages, isLoading, mutate } = useTasks(params);
-  const { developers } = useDevelopers();
+  const { developers: allDevelopers } = useDevelopers();
+
+  // Show only project members in dropdowns; fall back to all if no project selected
+  const projectMembers = selectedProject?.members;
+  const developers = projectMembers && projectMembers.length > 0
+    ? (projectMembers as import("@/types").IDeveloper[])
+    : allDevelopers;
 
   const handleSort = (field: string) => {
     if (sortBy === field) {
@@ -167,6 +176,10 @@ function TasksPageContent() {
       toast.error("Task name is required");
       return;
     }
+    if (!selectedProject) {
+      toast.error("Please select a project first");
+      return;
+    }
     try {
       setUploading("new");
       const body: Record<string, unknown> = {
@@ -175,6 +188,7 @@ function TasksPageContent() {
         status: newTask.status,
         priority: newTask.priority,
         date: newTask.date,
+        project: selectedProject._id,
       };
       if (newTask.assignee) body.assignee = newTask.assignee;
       if (newTask.dueDate) body.dueDate = newTask.dueDate;
@@ -274,10 +288,15 @@ function TasksPageContent() {
       toast.error("Please select a file");
       return;
     }
+    if (!selectedProject) {
+      toast.error("Please select a project first");
+      return;
+    }
     setImporting(true);
     try {
       const fd = new FormData();
       fd.append("file", importFile);
+      fd.append("project", selectedProject._id);
       const res = await fetch("/api/tasks/import", { method: "POST", body: fd });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);

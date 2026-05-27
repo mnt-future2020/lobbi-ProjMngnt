@@ -10,6 +10,16 @@ export interface IDeveloper {
   updatedAt: string;
 }
 
+export interface IProject {
+  _id: string;
+  name: string;
+  description: string;
+  status: "active" | "archived";
+  members: IDeveloper[] | string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface IAttachment {
   filename: string;
   path: string;
@@ -23,6 +33,7 @@ export interface ITask {
   status: "Pending" | "In Progress" | "Completed";
   priority: "Low" | "Medium" | "High";
   assignee: IDeveloper | string | null;
+  project: IProject | string;
   dueDate: string | null;
   date: string;
   attachments: IAttachment[];

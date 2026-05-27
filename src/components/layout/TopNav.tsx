@@ -1,16 +1,11 @@
 "use client";
 
-import { Search, User, LogOut, LogIn } from "lucide-react";
-import { useState } from "react";
+import { User, LogOut, LogIn } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
+import ProjectSelector from "@/components/ProjectSelector";
 
-interface TopNavProps {
-  onSearch?: (query: string) => void;
-}
-
-export default function TopNav({ onSearch }: TopNavProps) {
-  const [searchValue, setSearchValue] = useState("");
+export default function TopNav() {
   const { user, isAuthenticated, logout } = useAuth();
 
   return (
@@ -19,20 +14,8 @@ export default function TopNav({ onSearch }: TopNavProps) {
         {/* Spacer for mobile hamburger */}
         <div className="w-10 lg:hidden" />
 
-        {/* Search */}
-        <div className="relative flex-1 max-w-md hidden sm:block">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search..."
-            className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand transition-colors"
-            value={searchValue}
-            onChange={(e) => {
-              setSearchValue(e.target.value);
-              onSearch?.(e.target.value);
-            }}
-          />
-        </div>
+        {/* Project Selector */}
+        <ProjectSelector />
 
         {/* Right side */}
         <div className="flex items-center gap-3 ml-auto">

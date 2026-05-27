@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import Task from "@/lib/models/Task";
 import "@/lib/models/Developer";
+import "@/lib/models/Project";
 
 export const dynamic = "force-dynamic";
 
@@ -21,9 +22,14 @@ export async function GET(req: NextRequest) {
     const dateFrom = searchParams.get("dateFrom") || "";
     const dateTo = searchParams.get("dateTo") || "";
     const dates = searchParams.get("dates") || ""; // comma-separated: "2026-04-20,2026-04-21"
+    const project = searchParams.get("project") || "";
 
     // Build filter using $and to avoid $or conflicts
     const conditions: Record<string, unknown>[] = [];
+
+    if (project) {
+      conditions.push({ project });
+    }
 
     if (search) {
       conditions.push({
