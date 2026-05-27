@@ -76,6 +76,8 @@ function TasksPageContent() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
+  const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const params: Record<string, string> = {
     page: String(page),
@@ -229,9 +231,46 @@ function TasksPageContent() {
       const res = await fetch(`/api/tasks/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error(await apiError(res, "Failed to delete task"));
       toast.success("Task deleted");
+      setSelectedTasks((prev) => { const next = new Set(prev); next.delete(id); return next; });
       mutate();
     } catch (err: any) {
       toast.error(err?.message || "Failed to delete task");
+    }
+  };
+
+  const toggleSelectTask = (id: string) => {
+    setSelectedTasks((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedTasks.size === tasks.length) {
+      setSelectedTasks(new Set());
+    } else {
+      setSelectedTasks(new Set(tasks.map((t) => t._id)));
+    }
+  };
+
+  const bulkDeleteTasks = async () => {
+    if (selectedTasks.size === 0) return;
+    if (!confirm(`Delete ${selectedTasks.size} selected task${selectedTasks.size > 1 ? "s" : ""}?`)) return;
+    setBulkDeleting(true);
+    try {
+      const ids = Array.from(selectedTasks);
+      await Promise.all(
+        ids.map((id) => fetch(`/api/tasks/${id}`, { method: "DELETE" }))
+      );
+      toast.success(`${ids.length} task${ids.length > 1 ? "s" : ""} deleted`);
+      setSelectedTasks(new Set());
+      mutate();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to delete tasks");
+    } finally {
+      setBulkDeleting(false);
     }
   };
 
@@ -405,10 +444,47 @@ function TasksPageContent() {
 
       {/* Task Table */}
       <div className="card overflow-hidden">
+        {/* Bulk Action Bar */}
+        {selectedTasks.size > 0 && (
+          <div className="flex items-center justify-between px-4 py-2.5 bg-brand/5 border-b border-brand/10">
+            <span className="text-sm font-medium text-brand">
+              {selectedTasks.size} task{selectedTasks.size > 1 ? "s" : ""} selected
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setSelectedTasks(new Set())}
+                className="text-sm text-gray-500 hover:text-gray-700 px-3 py-1.5 rounded-lg hover:bg-white transition-colors"
+              >
+                Clear
+              </button>
+              <button
+                onClick={bulkDeleteTasks}
+                disabled={bulkDeleting}
+                className="flex items-center gap-1.5 text-sm font-medium text-white bg-red-500 hover:bg-red-600 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {bulkDeleting ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Trash2 className="w-3.5 h-3.5" />
+                )}
+                Delete Selected
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
+                <th className="w-10 px-4 py-3">
+                  <input
+                    type="checkbox"
+                    checked={tasks.length > 0 && selectedTasks.size === tasks.length}
+                    onChange={toggleSelectAll}
+                    className="rounded border-gray-300 text-brand focus:ring-brand"
+                  />
+                </th>
                 {[
                   { key: "date", label: "Date" },
                   { key: "title", label: "Task Name" },
@@ -440,14 +516,14 @@ function TasksPageContent() {
               {/* Loading */}
               {isLoading ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-12">
+                  <td colSpan={9} className="text-center py-12">
                     <Loader2 className="w-6 h-6 animate-spin text-gray-400 mx-auto" />
                   </td>
                 </tr>
               ) : tasks.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={9}
                     className="text-center py-12 text-gray-500 text-sm"
                   >
                     No tasks found
@@ -457,8 +533,20 @@ function TasksPageContent() {
                 tasks.map((task: ITask) => (
                   <tr
                     key={task._id}
-                    className="hover:bg-gray-50/50 transition-colors group"
+                    className={cn(
+                      "hover:bg-gray-50/50 transition-colors group",
+                      selectedTasks.has(task._id) && "bg-brand/5"
+                    )}
                   >
+                    {/* Checkbox */}
+                    <td className="w-10 px-4 py-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedTasks.has(task._id)}
+                        onChange={() => toggleSelectTask(task._id)}
+                        className="rounded border-gray-300 text-brand focus:ring-brand"
+                      />
+                    </td>
                     {/* Date */}
                     <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">
                       {editingCell?.id === task._id &&
