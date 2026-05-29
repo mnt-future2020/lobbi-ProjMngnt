@@ -15,6 +15,7 @@ export interface IFolder {
   name: string;
   project: string;
   order: number;
+  color: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -44,6 +45,7 @@ export interface ITask {
   assignee: IDeveloper | string | null;
   project: IProject | string;
   folder: IFolder | string | null;
+  hours: number | null;
   dueDate: string | null;
   date: string;
   attachments: IAttachment[];

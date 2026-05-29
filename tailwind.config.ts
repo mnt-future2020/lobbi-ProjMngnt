@@ -5,6 +5,7 @@ const config: Config = {
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/lib/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
     extend: {
@@ -22,6 +23,14 @@ const config: Config = {
       },
     },
   },
+  safelist: [
+    "bg-red-50/60", "border-red-200", "bg-red-500",
+    "bg-green-50/60", "border-green-200", "bg-green-500",
+    "bg-blue-50/60", "border-blue-200", "bg-blue-500",
+    "bg-yellow-50/60", "border-yellow-200", "bg-yellow-400",
+    "bg-purple-50/60", "border-purple-200", "bg-purple-500",
+    "bg-orange-50/60", "border-orange-200", "bg-orange-500",
+  ],
   plugins: [],
 };
 export default config;

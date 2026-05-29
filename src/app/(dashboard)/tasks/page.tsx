@@ -18,6 +18,7 @@ import {
   FolderOpen,
   Pencil,
   FolderInput,
+  Palette,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTasks } from "@/hooks/useTasks";
@@ -26,6 +27,7 @@ import { useFolders } from "@/hooks/useFolders";
 import { useProjects } from "@/hooks/useProjects";
 import { useFilterParams } from "@/hooks/useFilterParams";
 import { cn, formatDate, apiError } from "@/lib/utils";
+import { FOLDER_COLORS, getFolderColorStyle } from "@/lib/folderColors";
 import { ITask, IAttachment, IFolder, IProject, STATUS_OPTIONS, PRIORITY_OPTIONS } from "@/types";
 import MultiDatePicker from "@/components/MultiDatePicker";
 import MultiSelect from "@/components/MultiSelect";
@@ -72,6 +74,7 @@ function TasksPageContent() {
     assignee: "",
     dueDate: "",
     date: new Date().toISOString().split("T")[0],
+    hours: "",
   });
   const [newTaskFiles, setNewTaskFiles] = useState<File[]>([]);
   const [attachmentModal, setAttachmentModal] = useState<ITask | null>(null);
@@ -80,6 +83,9 @@ function TasksPageContent() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
+  const [importProjectId, setImportProjectId] = useState("");
+  const [importFolderId, setImportFolderId] = useState("");
+  const [importFolderOptions, setImportFolderOptions] = useState<IFolder[]>([]);
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
@@ -88,8 +94,10 @@ function TasksPageContent() {
   const [folderModalMode, setFolderModalMode] = useState<"create" | "rename">("create");
   const [editingFolder, setEditingFolder] = useState<IFolder | null>(null);
   const [folderName, setFolderName] = useState("");
+  const [folderColor, setFolderColor] = useState<string | null>(null);
   const [savingFolder, setSavingFolder] = useState(false);
   const [activeFolder, setActiveFolder] = useState<string | null>(null); // null = folder list view
+  const [colorPickerFolderId, setColorPickerFolderId] = useState<string | null>(null); // quick color picker
 
   // Move task state
   const [showMoveModal, setShowMoveModal] = useState(false);
@@ -226,6 +234,7 @@ function TasksPageContent() {
       };
       if (newTask.assignee) body.assignee = newTask.assignee;
       if (newTask.dueDate) body.dueDate = newTask.dueDate;
+      if (newTask.hours) body.hours = Number(newTask.hours);
 
       if (newTaskFiles.length > 0) {
         body.attachments = await uploadFiles(newTaskFiles);
@@ -248,6 +257,7 @@ function TasksPageContent() {
         assignee: "",
         dueDate: "",
         date: new Date().toISOString().split("T")[0],
+        hours: "",
       });
       setNewTaskFiles([]);
       mutate();
@@ -318,6 +328,18 @@ function TasksPageContent() {
       })
       .catch(() => { setMoveFolders([]); setMoveToFolderId(""); });
   }, [moveToProjectId]);
+
+  // Fetch folders when import project changes
+  useEffect(() => {
+    if (!importProjectId) { setImportFolderOptions([]); setImportFolderId(""); return; }
+    fetch(`/api/folders?project=${importProjectId}`)
+      .then((r) => r.json())
+      .then((data: IFolder[]) => {
+        setImportFolderOptions(data || []);
+        setImportFolderId(data?.[0]?._id || "");
+      })
+      .catch(() => { setImportFolderOptions([]); setImportFolderId(""); });
+  }, [importProjectId]);
 
   const openMoveModal = (task?: ITask) => {
     setMoveTaskTarget(task || null);
@@ -407,15 +429,16 @@ function TasksPageContent() {
       toast.error("Please select a file");
       return;
     }
-    if (!selectedProject) {
-      toast.error("Please select a project first");
+    if (!importProjectId) {
+      toast.error("Please select a project");
       return;
     }
     setImporting(true);
     try {
       const fd = new FormData();
       fd.append("file", importFile);
-      fd.append("project", selectedProject._id);
+      fd.append("project", importProjectId);
+      if (importFolderId) fd.append("folder", importFolderId);
       const res = await fetch("/api/tasks/import", { method: "POST", body: fd });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -425,6 +448,8 @@ function TasksPageContent() {
       }
       setShowImportModal(false);
       setImportFile(null);
+      setImportProjectId("");
+      setImportFolderId("");
       mutate();
     } catch (err: any) {
       toast.error(err.message || "Import failed");
@@ -445,6 +470,7 @@ function TasksPageContent() {
     setFolderModalMode("create");
     setEditingFolder(null);
     setFolderName("");
+    setFolderColor(null);
     setShowFolderModal(true);
   };
 
@@ -452,6 +478,7 @@ function TasksPageContent() {
     setFolderModalMode("rename");
     setEditingFolder(folder);
     setFolderName(folder.name);
+    setFolderColor(folder.color ?? null);
     setShowFolderModal(true);
   };
 
@@ -464,7 +491,7 @@ function TasksPageContent() {
         const res = await fetch("/api/folders", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: folderName.trim(), project: selectedProject._id }),
+          body: JSON.stringify({ name: folderName.trim(), project: selectedProject._id, color: folderColor }),
         });
         if (!res.ok) throw new Error(await apiError(res, "Failed to create folder"));
         toast.success("Folder created");
@@ -472,10 +499,10 @@ function TasksPageContent() {
         const res = await fetch(`/api/folders/${editingFolder._id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: folderName.trim() }),
+          body: JSON.stringify({ name: folderName.trim(), color: folderColor }),
         });
-        if (!res.ok) throw new Error(await apiError(res, "Failed to rename folder"));
-        toast.success("Folder renamed");
+        if (!res.ok) throw new Error(await apiError(res, "Failed to update folder"));
+        toast.success("Folder updated");
       }
       setShowFolderModal(false);
       mutateFolders();
@@ -483,6 +510,22 @@ function TasksPageContent() {
       toast.error(err?.message || "Failed to save folder");
     } finally {
       setSavingFolder(false);
+    }
+  };
+
+  const changeFolderColor = async (folderId: string, color: string | null) => {
+    try {
+      const res = await fetch(`/api/folders/${folderId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ color }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      mutateFolders();
+    } catch {
+      toast.error("Failed to update color");
+    } finally {
+      setColorPickerFolderId(null);
     }
   };
 
@@ -612,7 +655,7 @@ function TasksPageContent() {
           ))}
         </select>
       </td>
-      {/* Due Date */}
+      {/* Due Date + Hours */}
       <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">
         {editingCell?.id === task._id && editingCell?.field === "dueDate" ? (
           <input
@@ -628,12 +671,44 @@ function TasksPageContent() {
             autoFocus
           />
         ) : (
-          <span
-            className="cursor-pointer hover:text-brand"
-            onClick={() => startEditing(task._id, "dueDate", task.dueDate ? new Date(task.dueDate).toISOString().split("T")[0] : "")}
-          >
-            {formatDate(task.dueDate)}
-          </span>
+          <div className="space-y-1">
+            <span
+              className="cursor-pointer hover:text-brand block"
+              onClick={() => startEditing(task._id, "dueDate", task.dueDate ? new Date(task.dueDate).toISOString().split("T")[0] : "")}
+            >
+              {formatDate(task.dueDate)}
+            </span>
+            {editingCell?.id === task._id && editingCell?.field === "hours" ? (
+              <input
+                type="number"
+                min="0.5"
+                step="0.5"
+                className="input-field text-xs w-20"
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                onBlur={() => saveEdit(task._id, "hours", editValue)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") saveEdit(task._id, "hours", editValue);
+                  if (e.key === "Escape") cancelEditing();
+                }}
+                placeholder="hrs"
+                autoFocus
+              />
+            ) : (
+              <span
+                className="cursor-pointer"
+                onClick={() => startEditing(task._id, "hours", String(task.hours ?? ""))}
+              >
+                {task.hours ? (
+                  <span className="inline-flex items-center gap-1 bg-orange-50 text-orange-600 border border-orange-200 px-2 py-0.5 rounded-full text-[11px] font-medium">
+                    Within {task.hours}h
+                  </span>
+                ) : (
+                  <span className="text-gray-300 text-[11px] hover:text-gray-400">+ within hrs</span>
+                )}
+              </span>
+            )}
+          </div>
         )}
       </td>
       {/* Attachments */}
@@ -730,7 +805,7 @@ function TasksPageContent() {
           { key: "assignee", label: "Developer" },
           { key: "status", label: "Status" },
           { key: "priority", label: "Priority" },
-          { key: "dueDate", label: "Due Date" },
+          { key: "dueDate", label: "Due Date / Within" },
         ].map((col) => (
           <th
             key={col.key}
@@ -789,18 +864,65 @@ function TasksPageContent() {
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
               {folders.map((folder) => {
                 const count = tasksByFolder(folder._id).length;
+                const cs = getFolderColorStyle(folder.color);
                 return (
                   <div
                     key={folder._id}
                     onClick={() => { setActiveFolder(folder._id); setSelectedTasks(new Set()); }}
-                    className="card p-5 cursor-pointer hover:shadow-md hover:border-brand/20 transition-all group relative"
+                    className={cn(
+                      "card p-5 cursor-pointer hover:shadow-md transition-all group relative border",
+                      cs.card.bg,
+                      cs.card.border
+                    )}
                   >
-                    {/* Folder actions - appear on hover */}
-                    <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {/* Folder actions */}
+                    <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {/* Quick color picker */}
+                      <div className="relative">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setColorPickerFolderId(
+                              colorPickerFolderId === folder._id ? null : folder._id
+                            );
+                          }}
+                          className="p-1.5 hover:bg-white/70 rounded"
+                          title="Change color"
+                        >
+                          <Palette className="w-3.5 h-3.5 text-gray-400" />
+                        </button>
+                        {colorPickerFolderId === folder._id && (
+                          <div
+                            className="absolute right-0 top-8 z-20 bg-white border border-gray-200 rounded-xl shadow-lg p-3 w-44"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <p className="text-[11px] font-medium text-gray-500 mb-2">Pick a color</p>
+                            <div className="grid grid-cols-4 gap-2">
+                              {FOLDER_COLORS.map((c) => (
+                                <button
+                                  key={c.value ?? "default"}
+                                  title={c.label}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    changeFolderColor(folder._id, c.value);
+                                  }}
+                                  className={cn(
+                                    "w-7 h-7 rounded-full border-2 transition-transform hover:scale-110",
+                                    c.dot,
+                                    folder.color === c.value
+                                      ? "border-gray-800 scale-110"
+                                      : "border-transparent"
+                                  )}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                       <button
                         onClick={(e) => { e.stopPropagation(); openRenameFolder(folder); }}
-                        className="p-1.5 hover:bg-gray-100 rounded"
-                        title="Rename"
+                        className="p-1.5 hover:bg-white/70 rounded"
+                        title="Edit"
                       >
                         <Pencil className="w-3.5 h-3.5 text-gray-400" />
                       </button>
@@ -812,8 +934,15 @@ function TasksPageContent() {
                         <Trash2 className="w-3.5 h-3.5 text-red-400" />
                       </button>
                     </div>
-                    <FolderOpen className="w-9 h-9 text-brand/40 group-hover:text-brand/70 transition-colors mb-3" />
-                    <h3 className="font-semibold text-gray-800 text-sm mb-1 truncate pr-12">{folder.name}</h3>
+                    {/* Color dot indicator */}
+                    {folder.color && (
+                      <span className={cn(
+                        "absolute top-3 left-3 w-2.5 h-2.5 rounded-full",
+                        FOLDER_COLORS.find(c => c.value === folder.color)?.dot
+                      )} />
+                    )}
+                    <FolderOpen className={cn("w-9 h-9 transition-colors mb-3 mt-1", cs.card.icon)} />
+                    <h3 className="font-semibold text-gray-800 text-sm mb-1 truncate pr-10">{folder.name}</h3>
                     <p className="text-xs text-gray-400">{count} task{count !== 1 ? "s" : ""}</p>
                   </div>
                 );
@@ -855,7 +984,12 @@ function TasksPageContent() {
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setShowImportModal(true)}
+                onClick={() => {
+                  setImportProjectId(selectedProject?._id || "");
+                  setImportFolderId(activeFolder || "");
+                  setImportFile(null);
+                  setShowImportModal(true);
+                }}
                 className="btn-secondary flex items-center gap-2 text-xs sm:text-sm"
               >
                 <FileSpreadsheet className="w-4 h-4" />
@@ -1172,6 +1306,37 @@ function TasksPageContent() {
               </div>
             </div>
 
+            {/* Project + Folder selection */}
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Project <span className="text-red-500">*</span></label>
+                <select
+                  value={importProjectId}
+                  onChange={(e) => setImportProjectId(e.target.value)}
+                  className="input-field text-sm w-full"
+                >
+                  <option value="">Select project</option>
+                  {allProjects.map((p) => (
+                    <option key={p._id} value={p._id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Folder</label>
+                <select
+                  value={importFolderId}
+                  onChange={(e) => setImportFolderId(e.target.value)}
+                  className="input-field text-sm w-full"
+                  disabled={!importProjectId || importFolderOptions.length === 0}
+                >
+                  <option value="">No folder</option>
+                  {importFolderOptions.map((f) => (
+                    <option key={f._id} value={f._id}>{f.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
             {/* File Input */}
             <div className="mb-4">
               <label className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg py-6 cursor-pointer hover:border-brand hover:bg-brand/5 transition-colors">
@@ -1207,6 +1372,8 @@ function TasksPageContent() {
                 onClick={() => {
                   setShowImportModal(false);
                   setImportFile(null);
+                  setImportProjectId("");
+                  setImportFolderId("");
                 }}
                 className="btn-secondary flex-1"
               >
@@ -1214,7 +1381,7 @@ function TasksPageContent() {
               </button>
               <button
                 onClick={handleImport}
-                disabled={!importFile || importing}
+                disabled={!importFile || !importProjectId || importing}
                 className="btn-primary flex-1 flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {importing ? (
@@ -1341,6 +1508,34 @@ function TasksPageContent() {
               }}
               autoFocus
             />
+
+            {/* Color picker */}
+            <div className="mb-4">
+              <p className="text-xs font-medium text-gray-500 mb-2">Color</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                {FOLDER_COLORS.map((c) => (
+                  <button
+                    key={c.value ?? "default"}
+                    type="button"
+                    onClick={() => setFolderColor(c.value)}
+                    title={c.label}
+                    className={cn(
+                      "w-7 h-7 rounded-full border-2 transition-transform",
+                      c.dot,
+                      folderColor === c.value
+                        ? "border-gray-800 scale-110 shadow-md"
+                        : "border-transparent hover:scale-105"
+                    )}
+                  />
+                ))}
+              </div>
+              {folderColor && (
+                <p className="text-xs text-gray-400 mt-1.5">
+                  {FOLDER_COLORS.find(c => c.value === folderColor)?.label}
+                </p>
+              )}
+            </div>
+
             <div className="flex gap-3">
               <button
                 type="button"
@@ -1394,16 +1589,17 @@ function TasksPageContent() {
                 />
               </div>
 
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                <input
+                  type="date"
+                  className="input-field"
+                  value={newTask.date}
+                  onChange={(e) => setNewTask({ ...newTask, date: e.target.value })}
+                />
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-                  <input
-                    type="date"
-                    className="input-field"
-                    value={newTask.date}
-                    onChange={(e) => setNewTask({ ...newTask, date: e.target.value })}
-                  />
-                </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
                   <input
@@ -1412,6 +1608,23 @@ function TasksPageContent() {
                     value={newTask.dueDate}
                     onChange={(e) => setNewTask({ ...newTask, dueDate: e.target.value })}
                   />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Within (hours)
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="0.5"
+                      step="0.5"
+                      className="input-field pr-8"
+                      placeholder="e.g. 3"
+                      value={newTask.hours}
+                      onChange={(e) => setNewTask({ ...newTask, hours: e.target.value })}
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">h</span>
+                  </div>
                 </div>
               </div>
 

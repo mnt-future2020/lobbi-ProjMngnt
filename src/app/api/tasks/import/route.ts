@@ -11,6 +11,7 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const file = formData.get("file") as File;
     const projectId = formData.get("project") as string;
+    const folderId = (formData.get("folder") as string) || null;
 
     if (!file) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
@@ -149,6 +150,7 @@ export async function POST(req: NextRequest) {
         priority: priorityMap[rawPriority] || (validPriorities.includes(row[priorityCol!]) ? row[priorityCol!] : "Medium"),
         assignee: resolveDeveloper(rawDev) || null,
         project: projectId,
+        folder: folderId || null,
         date: parseDate(rawDate) || new Date(),
         dueDate: parseDate(rawDue) || null,
       });

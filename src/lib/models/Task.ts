@@ -8,6 +8,7 @@ export interface ITaskDoc extends Document {
   priority: string;
   assignee: mongoose.Types.ObjectId | null;
   project: mongoose.Types.ObjectId;
+  hours: number | null;
   dueDate: Date | null;
   date: Date;
   attachments: { filename: string; path: string; uploadedAt: Date }[];
@@ -42,6 +43,7 @@ const TaskSchema = new Schema(
       ref: "Folder",
       default: null,
     },
+    hours: { type: Number, default: null },
     dueDate: { type: Date, default: null },
     date: { type: Date, default: Date.now },
     attachments: [
