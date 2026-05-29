@@ -23,22 +23,19 @@ export async function POST() {
       });
     }
 
-    // ── 2. Assign all tasks without a project to "Lobbi" ─────────────────
-    const lobbiId = new mongoose.Types.ObjectId(lobbiProject._id);
+    // ── 2. Assign only un-projected tasks to "Lobbi" (never overwrite existing project) ──
+    const lobbiId = new mongoose.Types.ObjectId(lobbiProject._id as string);
     const taskResult = await Task.updateMany(
       { $or: [{ project: { $exists: false } }, { project: null }] },
       { $set: { project: lobbiId } }
     );
-
-    // Force-update all tasks to ensure ObjectId (not string)
-    await Task.updateMany({}, { $set: { project: lobbiId } });
 
     // ── 3. Create a "General" folder for each project ─────────────────────
     const projects = await Project.find().lean();
     const folderResults: { project: string; folder: string; tasksAssigned: number }[] = [];
 
     for (const proj of projects) {
-      const projId = new mongoose.Types.ObjectId(proj._id);
+      const projId = new mongoose.Types.ObjectId(proj._id as string);
 
       // Check if "General" folder already exists for this project
       let folder = await Folder.findOne({ project: projId, name: "General" });
@@ -46,7 +43,7 @@ export async function POST() {
         folder = await Folder.create({ name: "General", project: projId, order: 0 });
       }
 
-      const folderId = new mongoose.Types.ObjectId(folder._id);
+      const folderId = new mongoose.Types.ObjectId(folder._id as string);
 
       // Assign all tasks in this project that have no folder → General
       const res = await Task.updateMany(

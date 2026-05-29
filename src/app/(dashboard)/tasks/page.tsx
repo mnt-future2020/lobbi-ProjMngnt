@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import {
   Plus,
   Search,
@@ -88,6 +88,15 @@ function TasksPageContent() {
   const [folderName, setFolderName] = useState("");
   const [savingFolder, setSavingFolder] = useState(false);
   const [activeFolder, setActiveFolder] = useState<string | null>(null); // null = folder list view
+
+  // Reset to folder list whenever the selected project changes
+  useEffect(() => {
+    setActiveFolder(null);
+    setSelectedTasks(new Set());
+    setSearchInput("");
+    filters.clear();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProject?._id]);
 
   // When viewing a folder's tasks, apply filters; otherwise load all project tasks for counts
   const params: Record<string, string> = { page: "1", limit: "500", sortBy, sortOrder };
