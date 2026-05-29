@@ -5,10 +5,8 @@ import {
   Plus,
   Search,
   Trash2,
-  Check,
   X,
   ChevronLeft,
-  ChevronRight,
   ArrowUpDown,
   Upload,
   Paperclip,
@@ -18,8 +16,6 @@ import {
   FolderPlus,
   Folder,
   FolderOpen,
-  ChevronDown,
-  ChevronRight as ChevronRightIcon,
   Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -91,21 +87,20 @@ function TasksPageContent() {
   const [editingFolder, setEditingFolder] = useState<IFolder | null>(null);
   const [folderName, setFolderName] = useState("");
   const [savingFolder, setSavingFolder] = useState(false);
-  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
-  const [activeFolder, setActiveFolder] = useState<string | null>(null); // null = show all
+  const [activeFolder, setActiveFolder] = useState<string | null>(null); // null = folder list view
 
-  const params: Record<string, string> = {
-    page: String(page),
-    limit: "200", // load all tasks when grouped by folder
-    sortBy,
-    sortOrder,
-  };
+  // When viewing a folder's tasks, apply filters; otherwise load all project tasks for counts
+  const params: Record<string, string> = { page: "1", limit: "500", sortBy, sortOrder };
   if (selectedProject) params.project = selectedProject._id;
-  if (search) params.search = search;
-  if (filterStatus) params.status = filterStatus;
-  if (filterPriority) params.priority = filterPriority;
-  if (filterAssignee) params.assignee = filterAssignee;
-  if (filterDates) params.dates = filterDates;
+  if (activeFolder) {
+    params.folder = activeFolder;
+    params.limit = "200";
+    if (search) params.search = search;
+    if (filterStatus) params.status = filterStatus;
+    if (filterPriority) params.priority = filterPriority;
+    if (filterAssignee) params.assignee = filterAssignee;
+    if (filterDates) params.dates = filterDates;
+  }
 
   const { tasks, total, isLoading, mutate } = useTasks(params);
   const { folders, mutate: mutateFolders } = useFolders(selectedProject?._id);
@@ -430,20 +425,12 @@ function TasksPageContent() {
       const res = await fetch(`/api/folders/${folder._id}`, { method: "DELETE" });
       if (!res.ok) throw new Error(await apiError(res, "Failed to delete folder"));
       toast.success("Folder deleted");
+      if (activeFolder === folder._id) setActiveFolder(null);
       mutateFolders();
       mutate();
     } catch (err: any) {
       toast.error(err?.message || "Failed to delete folder");
     }
-  };
-
-  const toggleFolder = (folderId: string) => {
-    setCollapsedFolders((prev) => {
-      const next = new Set(prev);
-      if (next.has(folderId)) next.delete(folderId);
-      else next.add(folderId);
-      return next;
-    });
   };
 
   // Group tasks by folder
@@ -692,249 +679,237 @@ function TasksPageContent() {
 
   return (
     <div className="space-y-5">
-      {/* Page Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-xl lg:text-2xl font-bold text-gray-900">Task Management</h1>
-          <p className="text-sm text-gray-500 mt-1">{total} total tasks</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowImportModal(true)}
-            className="btn-secondary flex items-center gap-2 text-xs sm:text-sm"
-          >
-            <FileSpreadsheet className="w-4 h-4" />
-            <span className="hidden sm:inline">Import</span>
-          </button>
-          <button
-            onClick={openCreateFolder}
-            className="btn-secondary flex items-center gap-2 text-xs sm:text-sm"
-          >
-            <FolderPlus className="w-4 h-4" />
-            <span className="hidden sm:inline">New Folder</span>
-          </button>
-          <button
-            onClick={() => { setAddTaskFolderId(null); setShowAddModal(true); }}
-            className="btn-primary flex items-center gap-2 text-xs sm:text-sm"
-          >
-            <Plus className="w-4 h-4" />
-            Add Task
-          </button>
-        </div>
-      </div>
-
-      {/* Search & Filters Bar - Always visible */}
-      <div className="card p-4 lg:p-5 space-y-3 lg:space-y-4">
-        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-          <div className="relative flex-1 min-w-[150px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search tasks..."
-              className="input-field pl-9"
-              value={searchInput}
-              onChange={(e) => {
-                setSearchInput(e.target.value);
-                filters.setDebounced({ search: e.target.value });
-              }}
-            />
-          </div>
-          {hasFilters && (
-            <button
-              onClick={clearFilters}
-              className="text-sm text-red-500 hover:text-red-700"
-            >
-              Clear filters
-            </button>
-          )}
-        </div>
-
-          <div className="flex items-center gap-3 flex-wrap">
-            <MultiSelect
-              placeholder="All Status"
-              options={STATUS_OPTIONS.map((s) => ({ value: s, label: s }))}
-              selected={filterStatus ? filterStatus.split(",") : []}
-              onChange={(v) => filters.set({ status: v.join(",") })}
-            />
-            <MultiSelect
-              placeholder="All Priority"
-              options={PRIORITY_OPTIONS.map((p) => ({ value: p, label: p }))}
-              selected={filterPriority ? filterPriority.split(",") : []}
-              onChange={(v) => filters.set({ priority: v.join(",") })}
-            />
-            <MultiSelect
-              placeholder="All Developers"
-              options={[
-                { value: "unassigned", label: "Unassigned" },
-                ...developers.map((d) => ({ value: d._id, label: d.name })),
-              ]}
-              selected={filterAssignee ? filterAssignee.split(",") : []}
-              onChange={(v) => filters.set({ assignee: v.join(",") })}
-            />
-
-            <MultiDatePicker
-              selectedDates={filterDates ? filterDates.split(",") : []}
-              onChange={(dates) => filters.set({ dates: dates.join(",") })}
-            />
-          </div>
-      </div>
-
-      {/* Bulk Action Bar */}
-      {selectedTasks.size > 0 && (
-        <div className="card flex items-center justify-between px-4 py-2.5 bg-brand/5 border border-brand/10">
-          <span className="text-sm font-medium text-brand">
-            {selectedTasks.size} task{selectedTasks.size > 1 ? "s" : ""} selected
-          </span>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setSelectedTasks(new Set())}
-              className="text-sm text-gray-500 hover:text-gray-700 px-3 py-1.5 rounded-lg hover:bg-white transition-colors"
-            >
-              Clear
-            </button>
-            <button
-              onClick={bulkDeleteTasks}
-              disabled={bulkDeleting}
-              className="flex items-center gap-1.5 text-sm font-medium text-white bg-red-500 hover:bg-red-600 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
-            >
-              {bulkDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-              Delete Selected
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Folder-grouped Task Sections */}
-      {isLoading ? (
-        <div className="card p-12 flex items-center justify-center">
-          <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {/* Folder Sections */}
-          {folders.map((folder) => {
-            const folderTasks = tasksByFolder(folder._id);
-            const isCollapsed = collapsedFolders.has(folder._id);
-            const allFolderSelected = folderTasks.length > 0 && folderTasks.every((t) => selectedTasks.has(t._id));
-            return (
-              <div key={folder._id} className="card overflow-hidden">
-                {/* Folder Header */}
-                <div className="flex items-center gap-2 px-4 py-3 bg-gray-50/80 border-b border-gray-200">
-                  <button
-                    onClick={() => toggleFolder(folder._id)}
-                    className="p-0.5 hover:bg-gray-200 rounded transition-colors"
-                  >
-                    {isCollapsed
-                      ? <ChevronRightIcon className="w-4 h-4 text-gray-500" />
-                      : <ChevronDown className="w-4 h-4 text-gray-500" />}
-                  </button>
-                  {isCollapsed
-                    ? <Folder className="w-4 h-4 text-gray-400" />
-                    : <FolderOpen className="w-4 h-4 text-brand" />}
-                  <span className="text-sm font-semibold text-gray-800">{folder.name}</span>
-                  <span className="text-xs text-gray-500 bg-gray-200 px-2 py-0.5 rounded-full font-medium">
-                    {folderTasks.length}
-                  </span>
-                  <div className="ml-auto flex items-center gap-1">
-                    <button
-                      onClick={() => { setAddTaskFolderId(folder._id); setShowAddModal(true); }}
-                      className="flex items-center gap-1 text-xs text-brand hover:text-brand font-medium px-2.5 py-1 hover:bg-brand/5 border border-transparent hover:border-brand/20 rounded-lg transition-colors"
-                    >
-                      <Plus className="w-3 h-3" />
-                      Add Task
-                    </button>
-                    <button
-                      onClick={() => openRenameFolder(folder)}
-                      className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded transition-colors"
-                      title="Rename folder"
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => deleteFolder(folder)}
-                      className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
-                      title="Delete folder"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-                {/* Folder Task Table */}
-                {!isCollapsed && (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      {renderTableHead(folderTasks, () => {
-                        setSelectedTasks((prev) => {
-                          const next = new Set(prev);
-                          folderTasks.forEach((t) => allFolderSelected ? next.delete(t._id) : next.add(t._id));
-                          return next;
-                        });
-                      })}
-                      <tbody className="divide-y divide-gray-100">
-                        {folderTasks.length === 0 ? (
-                          <tr>
-                            <td colSpan={9} className="text-center py-8 text-gray-400 text-sm">
-                              No tasks yet —{" "}
-                              <button
-                                className="text-brand hover:underline"
-                                onClick={() => { setAddTaskFolderId(folder._id); setShowAddModal(true); }}
-                              >
-                                Add one
-                              </button>
-                            </td>
-                          </tr>
-                        ) : (
-                          folderTasks.map((task: ITask) => renderTaskRow(task))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-
-          {/* Unfoldered Tasks */}
-          {unfolderedTasks.length > 0 && (
-            <div className="card overflow-hidden">
-              <div className="flex items-center gap-2 px-4 py-3 bg-gray-50/80 border-b border-gray-200">
-                <Folder className="w-4 h-4 text-gray-400" />
-                <span className="text-sm font-semibold text-gray-500">Unfoldered</span>
-                <span className="text-xs text-gray-500 bg-gray-200 px-2 py-0.5 rounded-full font-medium">
-                  {unfolderedTasks.length}
-                </span>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  {renderTableHead(unfolderedTasks, () => {
-                    const allSelected = unfolderedTasks.every((t) => selectedTasks.has(t._id));
-                    setSelectedTasks((prev) => {
-                      const next = new Set(prev);
-                      unfolderedTasks.forEach((t) => allSelected ? next.delete(t._id) : next.add(t._id));
-                      return next;
-                    });
-                  })}
-                  <tbody className="divide-y divide-gray-100">
-                    {unfolderedTasks.map((task: ITask) => renderTaskRow(task))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* Empty State */}
-          {folders.length === 0 && unfolderedTasks.length === 0 && (
-            <div className="card p-12 text-center">
-              <FolderOpen className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-              <p className="text-gray-500 text-sm font-medium">No tasks found</p>
-              <p className="text-gray-400 text-xs mt-1">
-                {selectedProject
-                  ? "Create a folder and add tasks, or adjust your filters"
-                  : "Select a project to see tasks"}
+      {/* ── Folder List View ── */}
+      {!activeFolder ? (
+        <>
+          {/* Header */}
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <h1 className="text-xl lg:text-2xl font-bold text-gray-900">Task Management</h1>
+              <p className="text-sm text-gray-500 mt-1">
+                {selectedProject ? `${selectedProject.name} · ${folders.length} folder${folders.length !== 1 ? "s" : ""}` : "Select a project"}
               </p>
             </div>
+            <button
+              onClick={openCreateFolder}
+              className="btn-primary flex items-center gap-2 text-xs sm:text-sm"
+            >
+              <FolderPlus className="w-4 h-4" />
+              New Folder
+            </button>
+          </div>
+
+          {/* Folder Cards */}
+          {isLoading ? (
+            <div className="card p-12 flex items-center justify-center">
+              <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+            </div>
+          ) : !selectedProject ? (
+            <div className="card p-12 text-center">
+              <FolderOpen className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-500 text-sm">Select a project from the top bar</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+              {folders.map((folder) => {
+                const count = tasksByFolder(folder._id).length;
+                return (
+                  <div
+                    key={folder._id}
+                    onClick={() => { setActiveFolder(folder._id); setSelectedTasks(new Set()); }}
+                    className="card p-5 cursor-pointer hover:shadow-md hover:border-brand/20 transition-all group relative"
+                  >
+                    {/* Folder actions - appear on hover */}
+                    <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); openRenameFolder(folder); }}
+                        className="p-1.5 hover:bg-gray-100 rounded"
+                        title="Rename"
+                      >
+                        <Pencil className="w-3.5 h-3.5 text-gray-400" />
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); deleteFolder(folder); }}
+                        className="p-1.5 hover:bg-red-50 rounded"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                      </button>
+                    </div>
+                    <FolderOpen className="w-9 h-9 text-brand/40 group-hover:text-brand/70 transition-colors mb-3" />
+                    <h3 className="font-semibold text-gray-800 text-sm mb-1 truncate pr-12">{folder.name}</h3>
+                    <p className="text-xs text-gray-400">{count} task{count !== 1 ? "s" : ""}</p>
+                  </div>
+                );
+              })}
+
+              {/* New Folder card */}
+              <div
+                onClick={openCreateFolder}
+                className="card p-5 cursor-pointer border-2 border-dashed hover:border-brand/40 hover:bg-brand/5 transition-all flex flex-col items-center justify-center gap-2 text-gray-400 hover:text-brand min-h-[110px]"
+              >
+                <FolderPlus className="w-7 h-7" />
+                <span className="text-sm font-medium">New Folder</span>
+              </div>
+            </div>
           )}
-        </div>
+        </>
+      ) : (
+        /* ── Task View (inside a folder) ── */
+        <>
+          {/* Header with back navigation */}
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => { setActiveFolder(null); setSelectedTasks(new Set()); filters.clear(); setSearchInput(""); }}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Back to folders"
+              >
+                <ChevronLeft className="w-5 h-5 text-gray-600" />
+              </button>
+              <div>
+                <div className="flex items-center gap-2">
+                  <FolderOpen className="w-5 h-5 text-brand" />
+                  <h1 className="text-xl lg:text-2xl font-bold text-gray-900">
+                    {folders.find((f) => f._id === activeFolder)?.name || "Folder"}
+                  </h1>
+                </div>
+                <p className="text-sm text-gray-400 mt-0.5 ml-7">{total} task{total !== 1 ? "s" : ""}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowImportModal(true)}
+                className="btn-secondary flex items-center gap-2 text-xs sm:text-sm"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span className="hidden sm:inline">Import</span>
+              </button>
+              <button
+                onClick={() => { setAddTaskFolderId(activeFolder); setShowAddModal(true); }}
+                className="btn-primary flex items-center gap-2 text-xs sm:text-sm"
+              >
+                <Plus className="w-4 h-4" />
+                Add Task
+              </button>
+            </div>
+          </div>
+
+          {/* Search & Filters */}
+          <div className="card p-4 lg:p-5 space-y-3 lg:space-y-4">
+            <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+              <div className="relative flex-1 min-w-[150px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search tasks..."
+                  className="input-field pl-9"
+                  value={searchInput}
+                  onChange={(e) => {
+                    setSearchInput(e.target.value);
+                    filters.setDebounced({ search: e.target.value });
+                  }}
+                />
+              </div>
+              {hasFilters && (
+                <button onClick={clearFilters} className="text-sm text-red-500 hover:text-red-700">
+                  Clear filters
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-3 flex-wrap">
+              <MultiSelect
+                placeholder="All Status"
+                options={STATUS_OPTIONS.map((s) => ({ value: s, label: s }))}
+                selected={filterStatus ? filterStatus.split(",") : []}
+                onChange={(v) => filters.set({ status: v.join(",") })}
+              />
+              <MultiSelect
+                placeholder="All Priority"
+                options={PRIORITY_OPTIONS.map((p) => ({ value: p, label: p }))}
+                selected={filterPriority ? filterPriority.split(",") : []}
+                onChange={(v) => filters.set({ priority: v.join(",") })}
+              />
+              <MultiSelect
+                placeholder="All Developers"
+                options={[
+                  { value: "unassigned", label: "Unassigned" },
+                  ...developers.map((d) => ({ value: d._id, label: d.name })),
+                ]}
+                selected={filterAssignee ? filterAssignee.split(",") : []}
+                onChange={(v) => filters.set({ assignee: v.join(",") })}
+              />
+              <MultiDatePicker
+                selectedDates={filterDates ? filterDates.split(",") : []}
+                onChange={(dates) => filters.set({ dates: dates.join(",") })}
+              />
+            </div>
+          </div>
+
+          {/* Bulk Action Bar */}
+          {selectedTasks.size > 0 && (
+            <div className="card flex items-center justify-between px-4 py-2.5 bg-brand/5 border border-brand/10">
+              <span className="text-sm font-medium text-brand">
+                {selectedTasks.size} task{selectedTasks.size > 1 ? "s" : ""} selected
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setSelectedTasks(new Set())}
+                  className="text-sm text-gray-500 hover:text-gray-700 px-3 py-1.5 rounded-lg hover:bg-white transition-colors"
+                >
+                  Clear
+                </button>
+                <button
+                  onClick={bulkDeleteTasks}
+                  disabled={bulkDeleting}
+                  className="flex items-center gap-1.5 text-sm font-medium text-white bg-red-500 hover:bg-red-600 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {bulkDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                  Delete Selected
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Task Table */}
+          <div className="card overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                {renderTableHead(tasks, () => {
+                  const allSelected = tasks.length > 0 && tasks.every((t) => selectedTasks.has(t._id));
+                  setSelectedTasks((prev) => {
+                    const next = new Set(prev);
+                    tasks.forEach((t) => (allSelected ? next.delete(t._id) : next.add(t._id)));
+                    return next;
+                  });
+                })}
+                <tbody className="divide-y divide-gray-100">
+                  {isLoading ? (
+                    <tr>
+                      <td colSpan={9} className="text-center py-12">
+                        <Loader2 className="w-6 h-6 animate-spin text-gray-400 mx-auto" />
+                      </td>
+                    </tr>
+                  ) : tasks.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="text-center py-12 text-gray-400 text-sm">
+                        No tasks yet —{" "}
+                        <button
+                          className="text-brand hover:underline"
+                          onClick={() => { setAddTaskFolderId(activeFolder); setShowAddModal(true); }}
+                        >
+                          Add one
+                        </button>
+                      </td>
+                    </tr>
+                  ) : (
+                    tasks.map((task: ITask) => renderTaskRow(task))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
       )}
 
       {/* Attachment Preview Modal */}
