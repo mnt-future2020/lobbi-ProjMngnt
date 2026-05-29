@@ -1,6 +1,7 @@
 import mongoose, { Schema, Document } from "mongoose";
 
 export interface ITaskDoc extends Document {
+  folder: mongoose.Types.ObjectId | null;
   title: string;
   description: string;
   status: string;
@@ -34,6 +35,11 @@ const TaskSchema = new Schema(
     project: {
       type: Schema.Types.ObjectId,
       ref: "Project",
+      default: null,
+    },
+    folder: {
+      type: Schema.Types.ObjectId,
+      ref: "Folder",
       default: null,
     },
     dueDate: { type: Date, default: null },

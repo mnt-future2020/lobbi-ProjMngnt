@@ -10,6 +10,15 @@ export interface IDeveloper {
   updatedAt: string;
 }
 
+export interface IFolder {
+  _id: string;
+  name: string;
+  project: string;
+  order: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface IProject {
   _id: string;
   name: string;
@@ -34,6 +43,7 @@ export interface ITask {
   priority: "Low" | "Medium" | "High";
   assignee: IDeveloper | string | null;
   project: IProject | string;
+  folder: IFolder | string | null;
   dueDate: string | null;
   date: string;
   attachments: IAttachment[];

@@ -3,6 +3,7 @@ import { connectDB } from "@/lib/db";
 import Task from "@/lib/models/Task";
 import "@/lib/models/Developer";
 import "@/lib/models/Project";
+import "@/lib/models/Folder";
 
 export const dynamic = "force-dynamic";
 
@@ -23,12 +24,19 @@ export async function GET(req: NextRequest) {
     const dateTo = searchParams.get("dateTo") || "";
     const dates = searchParams.get("dates") || ""; // comma-separated: "2026-04-20,2026-04-21"
     const project = searchParams.get("project") || "";
+    const folder = searchParams.get("folder") || "";
 
     // Build filter using $and to avoid $or conflicts
     const conditions: Record<string, unknown>[] = [];
 
     if (project) {
       conditions.push({ project });
+    }
+
+    if (folder === "none") {
+      conditions.push({ $or: [{ folder: null }, { folder: { $exists: false } }] });
+    } else if (folder) {
+      conditions.push({ folder });
     }
 
     if (search) {
@@ -103,6 +111,7 @@ export async function GET(req: NextRequest) {
       Task.countDocuments(filter),
       Task.find(filter)
         .populate("assignee", "name email avatar role")
+        .populate("folder", "name")
         .sort(sort)
         .skip((page - 1) * limit)
         .limit(limit)
@@ -131,6 +140,7 @@ export async function POST(req: NextRequest) {
     const task = await Task.create(body);
     const populated = await Task.findById(task._id)
       .populate("assignee", "name email avatar role")
+      .populate("folder", "name")
       .lean();
     return NextResponse.json(populated, { status: 201 });
   } catch (error) {

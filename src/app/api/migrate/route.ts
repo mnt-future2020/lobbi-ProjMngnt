@@ -4,46 +4,74 @@ import { connectDB } from "@/lib/db";
 import Project from "@/lib/models/Project";
 import Task from "@/lib/models/Task";
 import Developer from "@/lib/models/Developer";
+import Folder from "@/lib/models/Folder";
 
 export async function POST() {
   try {
     await connectDB();
 
-    // Check if "Lobbi" project already exists
-    let project = await Project.findOne({ name: "Lobbi" });
+    // ── 1. Ensure "Lobbi" project exists ──────────────────────────────────
+    let lobbiProject = await Project.findOne({ name: "Lobbi" });
 
-    if (!project) {
-      // Get all developers to add as members
+    if (!lobbiProject) {
       const developers = await Developer.find().select("_id").lean();
-      const memberIds = developers.map((d) => d._id);
-
-      // Create the Lobbi project
-      project = await Project.create({
+      lobbiProject = await Project.create({
         name: "Lobbi",
         description: "Default project - migrated from single-project setup",
         status: "active",
-        members: memberIds,
+        members: developers.map((d) => d._id),
       });
     }
 
-    // Update all tasks - force reassign to ensure ObjectId type
-    const projectObjectId = new mongoose.Types.ObjectId(project._id);
-    const result = await Task.updateMany(
-      {},
-      { $set: { project: projectObjectId } }
+    // ── 2. Assign all tasks without a project to "Lobbi" ─────────────────
+    const lobbiId = new mongoose.Types.ObjectId(lobbiProject._id);
+    const taskResult = await Task.updateMany(
+      { $or: [{ project: { $exists: false } }, { project: null }] },
+      { $set: { project: lobbiId } }
     );
+
+    // Force-update all tasks to ensure ObjectId (not string)
+    await Task.updateMany({}, { $set: { project: lobbiId } });
+
+    // ── 3. Create a "General" folder for each project ─────────────────────
+    const projects = await Project.find().lean();
+    const folderResults: { project: string; folder: string; tasksAssigned: number }[] = [];
+
+    for (const proj of projects) {
+      const projId = new mongoose.Types.ObjectId(proj._id);
+
+      // Check if "General" folder already exists for this project
+      let folder = await Folder.findOne({ project: projId, name: "General" });
+      if (!folder) {
+        folder = await Folder.create({ name: "General", project: projId, order: 0 });
+      }
+
+      const folderId = new mongoose.Types.ObjectId(folder._id);
+
+      // Assign all tasks in this project that have no folder → General
+      const res = await Task.updateMany(
+        {
+          project: projId,
+          $or: [{ folder: { $exists: false } }, { folder: null }],
+        },
+        { $set: { folder: folderId } }
+      );
+
+      folderResults.push({
+        project: proj.name,
+        folder: folder.name,
+        tasksAssigned: res.modifiedCount,
+      });
+    }
 
     return NextResponse.json({
       message: "Migration completed",
-      projectId: project._id,
-      projectName: project.name,
-      tasksUpdated: result.modifiedCount,
+      lobbiProject: { id: lobbiProject._id, name: lobbiProject.name },
+      tasksUpdated: taskResult.modifiedCount,
+      folders: folderResults,
     });
   } catch (error) {
     console.error("Migration error:", error);
-    return NextResponse.json(
-      { error: "Migration failed" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Migration failed" }, { status: 500 });
   }
 }

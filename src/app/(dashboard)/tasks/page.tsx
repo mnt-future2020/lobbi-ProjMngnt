@@ -15,13 +15,20 @@ import {
   Loader2,
   Images,
   FileSpreadsheet,
+  FolderPlus,
+  Folder,
+  FolderOpen,
+  ChevronDown,
+  ChevronRight as ChevronRightIcon,
+  Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTasks } from "@/hooks/useTasks";
 import { useDevelopers } from "@/hooks/useDevelopers";
+import { useFolders } from "@/hooks/useFolders";
 import { useFilterParams } from "@/hooks/useFilterParams";
 import { cn, formatDate, apiError } from "@/lib/utils";
-import { ITask, IAttachment, STATUS_OPTIONS, PRIORITY_OPTIONS } from "@/types";
+import { ITask, IAttachment, IFolder, STATUS_OPTIONS, PRIORITY_OPTIONS } from "@/types";
 import MultiDatePicker from "@/components/MultiDatePicker";
 import MultiSelect from "@/components/MultiSelect";
 import { useProjectContext } from "@/contexts/ProjectContext";
@@ -52,14 +59,13 @@ function TasksPageContent() {
   const filterDates = filters.get("dates");
 
   const [searchInput, setSearchInput] = useState(search);
-  const setPage = (p: number) => filters.set({ page: String(p) }, false);
-
   const [editingCell, setEditingCell] = useState<{
     id: string;
     field: string;
   } | null>(null);
   const [editValue, setEditValue] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
+  const [addTaskFolderId, setAddTaskFolderId] = useState<string | null>(null);
   const [newTask, setNewTask] = useState({
     title: "",
     description: "",
@@ -79,9 +85,18 @@ function TasksPageContent() {
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
+  // Folder state
+  const [showFolderModal, setShowFolderModal] = useState(false);
+  const [folderModalMode, setFolderModalMode] = useState<"create" | "rename">("create");
+  const [editingFolder, setEditingFolder] = useState<IFolder | null>(null);
+  const [folderName, setFolderName] = useState("");
+  const [savingFolder, setSavingFolder] = useState(false);
+  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
+  const [activeFolder, setActiveFolder] = useState<string | null>(null); // null = show all
+
   const params: Record<string, string> = {
     page: String(page),
-    limit: "10",
+    limit: "200", // load all tasks when grouped by folder
     sortBy,
     sortOrder,
   };
@@ -92,7 +107,8 @@ function TasksPageContent() {
   if (filterAssignee) params.assignee = filterAssignee;
   if (filterDates) params.dates = filterDates;
 
-  const { tasks, total, totalPages, isLoading, mutate } = useTasks(params);
+  const { tasks, total, isLoading, mutate } = useTasks(params);
+  const { folders, mutate: mutateFolders } = useFolders(selectedProject?._id);
   const { developers: allDevelopers } = useDevelopers();
 
   // Show only project members in dropdowns; fall back to all if no project selected
@@ -191,6 +207,7 @@ function TasksPageContent() {
         priority: newTask.priority,
         date: newTask.date,
         project: selectedProject._id,
+        folder: addTaskFolderId || undefined,
       };
       if (newTask.assignee) body.assignee = newTask.assignee;
       if (newTask.dueDate) body.dueDate = newTask.dueDate;
@@ -207,6 +224,7 @@ function TasksPageContent() {
       if (!res.ok) throw new Error(await apiError(res, "Failed to create task"));
       toast.success("Task created");
       setShowAddModal(false);
+      setAddTaskFolderId(null);
       setNewTask({
         title: "",
         description: "",
@@ -360,6 +378,318 @@ function TasksPageContent() {
     filters.clear();
   };
 
+  // Folder handlers
+  const openCreateFolder = () => {
+    setFolderModalMode("create");
+    setEditingFolder(null);
+    setFolderName("");
+    setShowFolderModal(true);
+  };
+
+  const openRenameFolder = (folder: IFolder) => {
+    setFolderModalMode("rename");
+    setEditingFolder(folder);
+    setFolderName(folder.name);
+    setShowFolderModal(true);
+  };
+
+  const saveFolder = async () => {
+    if (!folderName.trim()) { toast.error("Folder name is required"); return; }
+    if (!selectedProject) { toast.error("Select a project first"); return; }
+    setSavingFolder(true);
+    try {
+      if (folderModalMode === "create") {
+        const res = await fetch("/api/folders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: folderName.trim(), project: selectedProject._id }),
+        });
+        if (!res.ok) throw new Error(await apiError(res, "Failed to create folder"));
+        toast.success("Folder created");
+      } else if (editingFolder) {
+        const res = await fetch(`/api/folders/${editingFolder._id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: folderName.trim() }),
+        });
+        if (!res.ok) throw new Error(await apiError(res, "Failed to rename folder"));
+        toast.success("Folder renamed");
+      }
+      setShowFolderModal(false);
+      mutateFolders();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to save folder");
+    } finally {
+      setSavingFolder(false);
+    }
+  };
+
+  const deleteFolder = async (folder: IFolder) => {
+    if (!confirm(`Delete folder "${folder.name}"? Tasks inside will become unfoldered.`)) return;
+    try {
+      const res = await fetch(`/api/folders/${folder._id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(await apiError(res, "Failed to delete folder"));
+      toast.success("Folder deleted");
+      mutateFolders();
+      mutate();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to delete folder");
+    }
+  };
+
+  const toggleFolder = (folderId: string) => {
+    setCollapsedFolders((prev) => {
+      const next = new Set(prev);
+      if (next.has(folderId)) next.delete(folderId);
+      else next.add(folderId);
+      return next;
+    });
+  };
+
+  // Group tasks by folder
+  const tasksByFolder = (folderId: string) =>
+    tasks.filter((t) => {
+      const tf = t.folder;
+      if (!tf) return false;
+      return typeof tf === "object" ? tf._id === folderId : tf === folderId;
+    });
+
+  const unfolderedTasks = tasks.filter((t) => !t.folder);
+
+  const renderTaskRow = (task: ITask) => (
+    <tr
+      key={task._id}
+      className={cn(
+        "hover:bg-gray-50/50 transition-colors group",
+        selectedTasks.has(task._id) && "bg-brand/5"
+      )}
+    >
+      {/* Checkbox */}
+      <td className="w-10 px-4 py-3">
+        <input
+          type="checkbox"
+          checked={selectedTasks.has(task._id)}
+          onChange={() => toggleSelectTask(task._id)}
+          className="rounded border-gray-300 text-brand focus:ring-brand"
+        />
+      </td>
+      {/* Date */}
+      <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">
+        {editingCell?.id === task._id && editingCell?.field === "date" ? (
+          <input
+            type="date"
+            className="input-field text-xs"
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={() => saveEdit(task._id, "date", editValue)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") saveEdit(task._id, "date", editValue);
+              if (e.key === "Escape") cancelEditing();
+            }}
+            autoFocus
+          />
+        ) : (
+          <span
+            className="cursor-pointer hover:text-brand"
+            onClick={() => startEditing(task._id, "date", task.date ? new Date(task.date).toISOString().split("T")[0] : "")}
+          >
+            {formatDate(task.date)}
+          </span>
+        )}
+      </td>
+      {/* Title */}
+      <td className="px-4 py-3">
+        {editingCell?.id === task._id && editingCell?.field === "title" ? (
+          <input
+            type="text"
+            className="input-field text-sm"
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={() => saveEdit(task._id, "title", editValue)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") saveEdit(task._id, "title", editValue);
+              if (e.key === "Escape") cancelEditing();
+            }}
+            autoFocus
+          />
+        ) : (
+          <span
+            className="text-sm font-medium text-gray-900 cursor-pointer hover:text-brand"
+            onClick={() => startEditing(task._id, "title", task.title)}
+          >
+            {task.title}
+          </span>
+        )}
+      </td>
+      {/* Assignee */}
+      <td className="px-4 py-3">
+        <select
+          className="text-sm bg-transparent border-0 text-gray-600 cursor-pointer hover:text-brand focus:outline-none focus:ring-0 p-0"
+          value={typeof task.assignee === "object" && task.assignee ? task.assignee._id : ""}
+          onChange={(e) => handleInlineSelect(task._id, "assignee", e.target.value)}
+        >
+          <option value="">Unassigned</option>
+          {developers.map((d) => (
+            <option key={d._id} value={d._id}>{d.name}</option>
+          ))}
+        </select>
+      </td>
+      {/* Status */}
+      <td className="px-4 py-3">
+        <select
+          className={cn("text-xs font-medium px-2.5 py-1 rounded-full border cursor-pointer focus:outline-none focus:ring-0", statusColors[task.status])}
+          value={task.status}
+          onChange={(e) => handleInlineSelect(task._id, "status", e.target.value)}
+        >
+          {STATUS_OPTIONS.map((s) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
+        </select>
+      </td>
+      {/* Priority */}
+      <td className="px-4 py-3">
+        <select
+          className={cn("text-xs font-medium px-2.5 py-1 rounded-full border cursor-pointer focus:outline-none focus:ring-0", priorityColors[task.priority])}
+          value={task.priority}
+          onChange={(e) => handleInlineSelect(task._id, "priority", e.target.value)}
+        >
+          {PRIORITY_OPTIONS.map((p) => (
+            <option key={p} value={p}>{p}</option>
+          ))}
+        </select>
+      </td>
+      {/* Due Date */}
+      <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">
+        {editingCell?.id === task._id && editingCell?.field === "dueDate" ? (
+          <input
+            type="date"
+            className="input-field text-xs"
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={() => saveEdit(task._id, "dueDate", editValue)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") saveEdit(task._id, "dueDate", editValue);
+              if (e.key === "Escape") cancelEditing();
+            }}
+            autoFocus
+          />
+        ) : (
+          <span
+            className="cursor-pointer hover:text-brand"
+            onClick={() => startEditing(task._id, "dueDate", task.dueDate ? new Date(task.dueDate).toISOString().split("T")[0] : "")}
+          >
+            {formatDate(task.dueDate)}
+          </span>
+        )}
+      </td>
+      {/* Attachments */}
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-1.5">
+          <label className="cursor-pointer p-1.5 text-gray-400 hover:text-brand hover:bg-gray-100 rounded transition-colors">
+            {uploading === task._id ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files.length > 0) {
+                      handleAttachmentUpload(task._id, e.target.files);
+                    }
+                    e.target.value = "";
+                  }}
+                />
+                <Upload className="w-3.5 h-3.5" />
+              </>
+            )}
+          </label>
+          {task.attachments && task.attachments.length > 0 && (
+            <button
+              onClick={() => setAttachmentModal(task)}
+              className="flex items-center gap-1 text-xs text-brand hover:text-brand-dark font-medium"
+            >
+              <Paperclip className="w-3 h-3" />
+              {task.attachments.length} image{task.attachments.length > 1 ? "s" : ""}
+            </button>
+          )}
+        </div>
+        {task.attachments && task.attachments.length > 0 && (
+          <div className="flex gap-1 mt-1">
+            {task.attachments.slice(0, 4).map((att, idx) => (
+              <img
+                key={idx}
+                src={att.path}
+                alt={att.filename}
+                className="w-7 h-7 rounded border border-gray-200 object-cover cursor-pointer hover:ring-2 hover:ring-brand/30"
+                onClick={() => setAttachmentModal(task)}
+              />
+            ))}
+            {task.attachments.length > 4 && (
+              <div
+                className="w-7 h-7 rounded border border-gray-200 bg-gray-50 flex items-center justify-center text-[10px] text-gray-500 cursor-pointer hover:bg-gray-100"
+                onClick={() => setAttachmentModal(task)}
+              >
+                +{task.attachments.length - 4}
+              </div>
+            )}
+          </div>
+        )}
+      </td>
+      {/* Actions */}
+      <td className="px-4 py-3 text-right">
+        <button
+          onClick={() => deleteTask(task._id)}
+          className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors opacity-0 group-hover:opacity-100"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </td>
+    </tr>
+  );
+
+  const renderTableHead = (taskList: ITask[], onSelectAll: () => void) => (
+    <thead>
+      <tr className="bg-gray-50 border-b border-gray-200">
+        <th className="w-10 px-4 py-3">
+          <input
+            type="checkbox"
+            checked={taskList.length > 0 && taskList.every((t) => selectedTasks.has(t._id))}
+            onChange={onSelectAll}
+            className="rounded border-gray-300 text-brand focus:ring-brand"
+          />
+        </th>
+        {[
+          { key: "date", label: "Date" },
+          { key: "title", label: "Task Name" },
+          { key: "assignee", label: "Developer" },
+          { key: "status", label: "Status" },
+          { key: "priority", label: "Priority" },
+          { key: "dueDate", label: "Due Date" },
+        ].map((col) => (
+          <th
+            key={col.key}
+            className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:text-gray-700 select-none"
+            onClick={() => handleSort(col.key)}
+          >
+            <div className="flex items-center gap-1">
+              {col.label}
+              <ArrowUpDown className="w-3 h-3" />
+            </div>
+          </th>
+        ))}
+        <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+          Attachments
+        </th>
+        <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+          Actions
+        </th>
+      </tr>
+    </thead>
+  );
+
   return (
     <div className="space-y-5">
       {/* Page Header */}
@@ -377,7 +707,14 @@ function TasksPageContent() {
             <span className="hidden sm:inline">Import</span>
           </button>
           <button
-            onClick={() => setShowAddModal(true)}
+            onClick={openCreateFolder}
+            className="btn-secondary flex items-center gap-2 text-xs sm:text-sm"
+          >
+            <FolderPlus className="w-4 h-4" />
+            <span className="hidden sm:inline">New Folder</span>
+          </button>
+          <button
+            onClick={() => { setAddTaskFolderId(null); setShowAddModal(true); }}
             className="btn-primary flex items-center gap-2 text-xs sm:text-sm"
           >
             <Plus className="w-4 h-4" />
@@ -442,420 +779,163 @@ function TasksPageContent() {
           </div>
       </div>
 
-      {/* Task Table */}
-      <div className="card overflow-hidden">
-        {/* Bulk Action Bar */}
-        {selectedTasks.size > 0 && (
-          <div className="flex items-center justify-between px-4 py-2.5 bg-brand/5 border-b border-brand/10">
-            <span className="text-sm font-medium text-brand">
-              {selectedTasks.size} task{selectedTasks.size > 1 ? "s" : ""} selected
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setSelectedTasks(new Set())}
-                className="text-sm text-gray-500 hover:text-gray-700 px-3 py-1.5 rounded-lg hover:bg-white transition-colors"
-              >
-                Clear
-              </button>
-              <button
-                onClick={bulkDeleteTasks}
-                disabled={bulkDeleting}
-                className="flex items-center gap-1.5 text-sm font-medium text-white bg-red-500 hover:bg-red-600 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
-              >
-                {bulkDeleting ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Trash2 className="w-3.5 h-3.5" />
-                )}
-                Delete Selected
-              </button>
-            </div>
+      {/* Bulk Action Bar */}
+      {selectedTasks.size > 0 && (
+        <div className="card flex items-center justify-between px-4 py-2.5 bg-brand/5 border border-brand/10">
+          <span className="text-sm font-medium text-brand">
+            {selectedTasks.size} task{selectedTasks.size > 1 ? "s" : ""} selected
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setSelectedTasks(new Set())}
+              className="text-sm text-gray-500 hover:text-gray-700 px-3 py-1.5 rounded-lg hover:bg-white transition-colors"
+            >
+              Clear
+            </button>
+            <button
+              onClick={bulkDeleteTasks}
+              disabled={bulkDeleting}
+              className="flex items-center gap-1.5 text-sm font-medium text-white bg-red-500 hover:bg-red-600 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+            >
+              {bulkDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+              Delete Selected
+            </button>
           </div>
-        )}
-
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="w-10 px-4 py-3">
-                  <input
-                    type="checkbox"
-                    checked={tasks.length > 0 && selectedTasks.size === tasks.length}
-                    onChange={toggleSelectAll}
-                    className="rounded border-gray-300 text-brand focus:ring-brand"
-                  />
-                </th>
-                {[
-                  { key: "date", label: "Date" },
-                  { key: "title", label: "Task Name" },
-                  { key: "assignee", label: "Developer" },
-                  { key: "status", label: "Status" },
-                  { key: "priority", label: "Priority" },
-                  { key: "dueDate", label: "Due Date" },
-                ].map((col) => (
-                  <th
-                    key={col.key}
-                    className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:text-gray-700 select-none"
-                    onClick={() => handleSort(col.key)}
-                  >
-                    <div className="flex items-center gap-1">
-                      {col.label}
-                      <ArrowUpDown className="w-3 h-3" />
-                    </div>
-                  </th>
-                ))}
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                  Attachments
-                </th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {/* Loading */}
-              {isLoading ? (
-                <tr>
-                  <td colSpan={9} className="text-center py-12">
-                    <Loader2 className="w-6 h-6 animate-spin text-gray-400 mx-auto" />
-                  </td>
-                </tr>
-              ) : tasks.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={9}
-                    className="text-center py-12 text-gray-500 text-sm"
-                  >
-                    No tasks found
-                  </td>
-                </tr>
-              ) : (
-                tasks.map((task: ITask) => (
-                  <tr
-                    key={task._id}
-                    className={cn(
-                      "hover:bg-gray-50/50 transition-colors group",
-                      selectedTasks.has(task._id) && "bg-brand/5"
-                    )}
-                  >
-                    {/* Checkbox */}
-                    <td className="w-10 px-4 py-3">
-                      <input
-                        type="checkbox"
-                        checked={selectedTasks.has(task._id)}
-                        onChange={() => toggleSelectTask(task._id)}
-                        className="rounded border-gray-300 text-brand focus:ring-brand"
-                      />
-                    </td>
-                    {/* Date */}
-                    <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">
-                      {editingCell?.id === task._id &&
-                      editingCell?.field === "date" ? (
-                        <input
-                          type="date"
-                          className="input-field text-xs"
-                          value={editValue}
-                          onChange={(e) => setEditValue(e.target.value)}
-                          onBlur={() =>
-                            saveEdit(task._id, "date", editValue)
-                          }
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter")
-                              saveEdit(task._id, "date", editValue);
-                            if (e.key === "Escape") cancelEditing();
-                          }}
-                          autoFocus
-                        />
-                      ) : (
-                        <span
-                          className="cursor-pointer hover:text-brand"
-                          onClick={() =>
-                            startEditing(
-                              task._id,
-                              "date",
-                              task.date
-                                ? new Date(task.date)
-                                    .toISOString()
-                                    .split("T")[0]
-                                : ""
-                            )
-                          }
-                        >
-                          {formatDate(task.date)}
-                        </span>
-                      )}
-                    </td>
-
-                    {/* Title */}
-                    <td className="px-4 py-3">
-                      {editingCell?.id === task._id &&
-                      editingCell?.field === "title" ? (
-                        <input
-                          type="text"
-                          className="input-field text-sm"
-                          value={editValue}
-                          onChange={(e) => setEditValue(e.target.value)}
-                          onBlur={() =>
-                            saveEdit(task._id, "title", editValue)
-                          }
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter")
-                              saveEdit(task._id, "title", editValue);
-                            if (e.key === "Escape") cancelEditing();
-                          }}
-                          autoFocus
-                        />
-                      ) : (
-                        <span
-                          className="text-sm font-medium text-gray-900 cursor-pointer hover:text-brand"
-                          onClick={() =>
-                            startEditing(task._id, "title", task.title)
-                          }
-                        >
-                          {task.title}
-                        </span>
-                      )}
-                    </td>
-
-                    {/* Assignee */}
-                    <td className="px-4 py-3">
-                      <select
-                        className="text-sm bg-transparent border-0 text-gray-600 cursor-pointer hover:text-brand focus:outline-none focus:ring-0 p-0"
-                        value={
-                          typeof task.assignee === "object" && task.assignee
-                            ? task.assignee._id
-                            : ""
-                        }
-                        onChange={(e) =>
-                          handleInlineSelect(
-                            task._id,
-                            "assignee",
-                            e.target.value
-                          )
-                        }
-                      >
-                        <option value="">Unassigned</option>
-                        {developers.map((d) => (
-                          <option key={d._id} value={d._id}>
-                            {d.name}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-
-                    {/* Status */}
-                    <td className="px-4 py-3">
-                      <select
-                        className={cn(
-                          "text-xs font-medium px-2.5 py-1 rounded-full border cursor-pointer focus:outline-none focus:ring-0",
-                          statusColors[task.status]
-                        )}
-                        value={task.status}
-                        onChange={(e) =>
-                          handleInlineSelect(
-                            task._id,
-                            "status",
-                            e.target.value
-                          )
-                        }
-                      >
-                        {STATUS_OPTIONS.map((s) => (
-                          <option key={s} value={s}>
-                            {s}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-
-                    {/* Priority */}
-                    <td className="px-4 py-3">
-                      <select
-                        className={cn(
-                          "text-xs font-medium px-2.5 py-1 rounded-full border cursor-pointer focus:outline-none focus:ring-0",
-                          priorityColors[task.priority]
-                        )}
-                        value={task.priority}
-                        onChange={(e) =>
-                          handleInlineSelect(
-                            task._id,
-                            "priority",
-                            e.target.value
-                          )
-                        }
-                      >
-                        {PRIORITY_OPTIONS.map((p) => (
-                          <option key={p} value={p}>
-                            {p}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-
-                    {/* Due Date */}
-                    <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">
-                      {editingCell?.id === task._id &&
-                      editingCell?.field === "dueDate" ? (
-                        <input
-                          type="date"
-                          className="input-field text-xs"
-                          value={editValue}
-                          onChange={(e) => setEditValue(e.target.value)}
-                          onBlur={() =>
-                            saveEdit(task._id, "dueDate", editValue)
-                          }
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter")
-                              saveEdit(task._id, "dueDate", editValue);
-                            if (e.key === "Escape") cancelEditing();
-                          }}
-                          autoFocus
-                        />
-                      ) : (
-                        <span
-                          className="cursor-pointer hover:text-brand"
-                          onClick={() =>
-                            startEditing(
-                              task._id,
-                              "dueDate",
-                              task.dueDate
-                                ? new Date(task.dueDate)
-                                    .toISOString()
-                                    .split("T")[0]
-                                : ""
-                            )
-                          }
-                        >
-                          {formatDate(task.dueDate)}
-                        </span>
-                      )}
-                    </td>
-
-                    {/* Attachments */}
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1.5">
-                        {/* Upload button - multiple files */}
-                        <label className="cursor-pointer p-1.5 text-gray-400 hover:text-brand hover:bg-gray-100 rounded transition-colors">
-                          {uploading === task._id ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <>
-                              <input
-                                type="file"
-                                accept="image/*"
-                                multiple
-                                className="hidden"
-                                onChange={(e) => {
-                                  if (e.target.files && e.target.files.length > 0) {
-                                    handleAttachmentUpload(
-                                      task._id,
-                                      e.target.files
-                                    );
-                                  }
-                                  e.target.value = "";
-                                }}
-                              />
-                              <Upload className="w-3.5 h-3.5" />
-                            </>
-                          )}
-                        </label>
-
-                        {/* Show count + preview link */}
-                        {task.attachments && task.attachments.length > 0 && (
-                          <button
-                            onClick={() => setAttachmentModal(task)}
-                            className="flex items-center gap-1 text-xs text-brand hover:text-brand-dark font-medium"
-                          >
-                            <Paperclip className="w-3 h-3" />
-                            {task.attachments.length} image
-                            {task.attachments.length > 1 ? "s" : ""}
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Inline thumbnail strip */}
-                      {task.attachments && task.attachments.length > 0 && (
-                        <div className="flex gap-1 mt-1">
-                          {task.attachments.slice(0, 4).map((att, idx) => (
-                            <img
-                              key={idx}
-                              src={att.path}
-                              alt={att.filename}
-                              className="w-7 h-7 rounded border border-gray-200 object-cover cursor-pointer hover:ring-2 hover:ring-brand/30"
-                              onClick={() => setAttachmentModal(task)}
-                            />
-                          ))}
-                          {task.attachments.length > 4 && (
-                            <div
-                              className="w-7 h-7 rounded border border-gray-200 bg-gray-50 flex items-center justify-center text-[10px] text-gray-500 cursor-pointer hover:bg-gray-100"
-                              onClick={() => setAttachmentModal(task)}
-                            >
-                              +{task.attachments.length - 4}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </td>
-
-                    {/* Actions */}
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={() => deleteTask(task._id)}
-                        className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors opacity-0 group-hover:opacity-100"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
         </div>
+      )}
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 flex-wrap gap-2">
-            <p className="text-xs sm:text-sm text-gray-500">
-              Page {page} of {totalPages} ({total})
-            </p>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setPage(Math.max(1, page - 1))}
-                disabled={page === 1}
-                className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                const pageNum =
-                  Math.max(1, Math.min(page - 2, totalPages - 4)) + i;
-                if (pageNum > totalPages) return null;
-                return (
+      {/* Folder-grouped Task Sections */}
+      {isLoading ? (
+        <div className="card p-12 flex items-center justify-center">
+          <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {/* Folder Sections */}
+          {folders.map((folder) => {
+            const folderTasks = tasksByFolder(folder._id);
+            const isCollapsed = collapsedFolders.has(folder._id);
+            const allFolderSelected = folderTasks.length > 0 && folderTasks.every((t) => selectedTasks.has(t._id));
+            return (
+              <div key={folder._id} className="card overflow-hidden">
+                {/* Folder Header */}
+                <div className="flex items-center gap-2 px-4 py-3 bg-gray-50/80 border-b border-gray-200">
                   <button
-                    key={pageNum}
-                    onClick={() => setPage(pageNum)}
-                    className={cn(
-                      "w-8 h-8 rounded-lg text-sm font-medium",
-                      page === pageNum
-                        ? "bg-brand text-white"
-                        : "hover:bg-gray-100 text-gray-600"
-                    )}
+                    onClick={() => toggleFolder(folder._id)}
+                    className="p-0.5 hover:bg-gray-200 rounded transition-colors"
                   >
-                    {pageNum}
+                    {isCollapsed
+                      ? <ChevronRightIcon className="w-4 h-4 text-gray-500" />
+                      : <ChevronDown className="w-4 h-4 text-gray-500" />}
                   </button>
-                );
-              })}
-              <button
-                onClick={() => setPage(Math.min(totalPages, page + 1))}
-                disabled={page === totalPages}
-                className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
+                  {isCollapsed
+                    ? <Folder className="w-4 h-4 text-gray-400" />
+                    : <FolderOpen className="w-4 h-4 text-brand" />}
+                  <span className="text-sm font-semibold text-gray-800">{folder.name}</span>
+                  <span className="text-xs text-gray-500 bg-gray-200 px-2 py-0.5 rounded-full font-medium">
+                    {folderTasks.length}
+                  </span>
+                  <div className="ml-auto flex items-center gap-1">
+                    <button
+                      onClick={() => { setAddTaskFolderId(folder._id); setShowAddModal(true); }}
+                      className="flex items-center gap-1 text-xs text-brand hover:text-brand font-medium px-2.5 py-1 hover:bg-brand/5 border border-transparent hover:border-brand/20 rounded-lg transition-colors"
+                    >
+                      <Plus className="w-3 h-3" />
+                      Add Task
+                    </button>
+                    <button
+                      onClick={() => openRenameFolder(folder)}
+                      className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded transition-colors"
+                      title="Rename folder"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => deleteFolder(folder)}
+                      className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                      title="Delete folder"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+                {/* Folder Task Table */}
+                {!isCollapsed && (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      {renderTableHead(folderTasks, () => {
+                        setSelectedTasks((prev) => {
+                          const next = new Set(prev);
+                          folderTasks.forEach((t) => allFolderSelected ? next.delete(t._id) : next.add(t._id));
+                          return next;
+                        });
+                      })}
+                      <tbody className="divide-y divide-gray-100">
+                        {folderTasks.length === 0 ? (
+                          <tr>
+                            <td colSpan={9} className="text-center py-8 text-gray-400 text-sm">
+                              No tasks yet —{" "}
+                              <button
+                                className="text-brand hover:underline"
+                                onClick={() => { setAddTaskFolderId(folder._id); setShowAddModal(true); }}
+                              >
+                                Add one
+                              </button>
+                            </td>
+                          </tr>
+                        ) : (
+                          folderTasks.map((task: ITask) => renderTaskRow(task))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {/* Unfoldered Tasks */}
+          {unfolderedTasks.length > 0 && (
+            <div className="card overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 bg-gray-50/80 border-b border-gray-200">
+                <Folder className="w-4 h-4 text-gray-400" />
+                <span className="text-sm font-semibold text-gray-500">Unfoldered</span>
+                <span className="text-xs text-gray-500 bg-gray-200 px-2 py-0.5 rounded-full font-medium">
+                  {unfolderedTasks.length}
+                </span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  {renderTableHead(unfolderedTasks, () => {
+                    const allSelected = unfolderedTasks.every((t) => selectedTasks.has(t._id));
+                    setSelectedTasks((prev) => {
+                      const next = new Set(prev);
+                      unfolderedTasks.forEach((t) => allSelected ? next.delete(t._id) : next.add(t._id));
+                      return next;
+                    });
+                  })}
+                  <tbody className="divide-y divide-gray-100">
+                    {unfolderedTasks.map((task: ITask) => renderTaskRow(task))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+
+          {/* Empty State */}
+          {folders.length === 0 && unfolderedTasks.length === 0 && (
+            <div className="card p-12 text-center">
+              <FolderOpen className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-500 text-sm font-medium">No tasks found</p>
+              <p className="text-gray-400 text-xs mt-1">
+                {selectedProject
+                  ? "Create a folder and add tasks, or adjust your filters"
+                  : "Select a project to see tasks"}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Attachment Preview Modal */}
       {attachmentModal && (
@@ -1085,6 +1165,60 @@ function TasksPageContent() {
                   <Upload className="w-4 h-4" />
                 )}
                 {importing ? "Importing..." : "Import"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Folder Create / Rename Modal */}
+      {showFolderModal && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          onClick={() => setShowFolderModal(false)}
+        >
+          <div
+            className="bg-white rounded-xl p-6 w-full max-w-sm"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <FolderPlus className="w-5 h-5 text-brand" />
+                <h2 className="text-lg font-semibold text-gray-900">
+                  {folderModalMode === "create" ? "New Folder" : "Rename Folder"}
+                </h2>
+              </div>
+              <button onClick={() => setShowFolderModal(false)} className="p-1 hover:bg-gray-100 rounded">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <input
+              type="text"
+              className="input-field mb-4"
+              placeholder="Folder name"
+              value={folderName}
+              onChange={(e) => setFolderName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") saveFolder();
+                if (e.key === "Escape") setShowFolderModal(false);
+              }}
+              autoFocus
+            />
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setShowFolderModal(false)}
+                className="btn-secondary flex-1"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveFolder}
+                disabled={savingFolder}
+                className="btn-primary flex-1 flex items-center justify-center gap-2"
+              >
+                {savingFolder && <Loader2 className="w-4 h-4 animate-spin" />}
+                {folderModalMode === "create" ? "Create" : "Save"}
               </button>
             </div>
           </div>
