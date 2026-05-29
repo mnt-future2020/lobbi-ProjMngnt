@@ -12,6 +12,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const status = searchParams.get("status") || "";
     const search = searchParams.get("search") || "";
+    const member = searchParams.get("member") || "";
 
     const filter: Record<string, unknown> = {};
 
@@ -21,6 +22,11 @@ export async function GET(req: NextRequest) {
 
     if (search) {
       filter.name = { $regex: search, $options: "i" };
+    }
+
+    // Filter by member — show only projects this user belongs to
+    if (member) {
+      filter.members = member;
     }
 
     const projects = await Project.find(filter)

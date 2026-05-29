@@ -34,11 +34,26 @@ export function useAuth() {
     router.push("/login");
   };
 
+  const permissions: string[] = data?.user?.permissions || [];
+
+  const can = (perm: string) => {
+    if (data?.user?.isAdmin) return true; // admin can do everything
+    if (permissions.includes(perm)) return true;
+    // "xxx.view_all" implies "xxx.view"
+    if (perm.endsWith(".view")) {
+      const viewAllKey = perm.replace(".view", ".view_all");
+      if (permissions.includes(viewAllKey)) return true;
+    }
+    return false;
+  };
+
   return {
     user: data?.user || null,
     isLoading,
     isAuthenticated: !!data?.user,
     isAdmin: data?.user?.isAdmin === true,
+    permissions,
+    can,
     login,
     logout,
     mutate,

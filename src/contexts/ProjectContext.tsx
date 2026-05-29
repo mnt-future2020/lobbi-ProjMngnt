@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { IProject } from "@/types";
 import { useProjects } from "@/hooks/useProjects";
+import { useAuth } from "@/hooks/useAuth";
 
 interface ProjectContextType {
   projects: IProject[];
@@ -21,7 +22,10 @@ const ProjectContext = createContext<ProjectContextType>({
 });
 
 export function ProjectProvider({ children }: { children: ReactNode }) {
-  const { projects, isLoading, mutate } = useProjects("active");
+  const { user, isAdmin } = useAuth();
+  // Non-admin users only see projects they're a member of
+  const memberId = user?._id && !isAdmin ? user._id : undefined;
+  const { projects, isLoading, mutate } = useProjects("active", memberId);
   const [selectedProject, setSelectedProjectState] = useState<IProject | null>(null);
 
   // On first load, restore selected project from localStorage

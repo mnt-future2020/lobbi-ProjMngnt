@@ -10,6 +10,7 @@ import {
   LogIn,
   Menu,
   X,
+  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
@@ -22,7 +23,8 @@ const publicItems = [
 const adminItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/tasks", label: "Tasks", icon: ClipboardList },
-  { href: "/developers", label: "Developers", icon: Users },
+  { href: "/users", label: "Users", icon: Users },
+  { href: "/roles", label: "Roles & Permissions", icon: ShieldCheck },
   { href: "/projects", label: "Projects", icon: FolderKanban },
 ];
 

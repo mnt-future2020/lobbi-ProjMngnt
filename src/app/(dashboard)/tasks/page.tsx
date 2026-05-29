@@ -31,6 +31,7 @@ import { FOLDER_COLORS, getFolderColorStyle } from "@/lib/folderColors";
 import { ITask, IAttachment, IFolder, IProject, STATUS_OPTIONS, PRIORITY_OPTIONS } from "@/types";
 import MultiDatePicker from "@/components/MultiDatePicker";
 import MultiSelect from "@/components/MultiSelect";
+import Portal from "@/components/Portal";
 import { useProjectContext } from "@/contexts/ProjectContext";
 
 const statusColors: Record<string, string> = {
@@ -1131,8 +1132,8 @@ function TasksPageContent() {
 
       {/* Attachment Preview Modal */}
       {attachmentModal && (
-        <div
-          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+        <Portal><div
+          className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] p-4"
           onClick={() => setAttachmentModal(null)}
         >
           <div
@@ -1232,13 +1233,13 @@ function TasksPageContent() {
               </div>
             </div>
           </div>
-        </div>
+        </div></Portal>
       )}
 
       {/* Lightbox - Full Image Preview */}
       {lightboxImage && (
-        <div
-          className="fixed inset-0 bg-black/90 flex items-center justify-center z-[60] p-4"
+        <Portal><div
+          className="fixed inset-0 bg-black/90 flex items-center justify-center z-[110] p-4"
           onClick={() => setLightboxImage(null)}
         >
           <button
@@ -1260,13 +1261,13 @@ function TasksPageContent() {
               {lightboxImage.filename}
             </p>
           </div>
-        </div>
+        </div></Portal>
       )}
 
       {/* Import Modal */}
       {showImportModal && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+        <Portal><div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4"
           onClick={() => setShowImportModal(false)}
         >
           <div
@@ -1393,13 +1394,13 @@ function TasksPageContent() {
               </button>
             </div>
           </div>
-        </div>
+        </div></Portal>
       )}
 
       {/* Move Task(s) Modal */}
       {showMoveModal && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+        <Portal><div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4"
           onClick={() => setShowMoveModal(false)}
         >
           <div
@@ -1472,13 +1473,13 @@ function TasksPageContent() {
               </button>
             </div>
           </div>
-        </div>
+        </div></Portal>
       )}
 
       {/* Folder Create / Rename Modal */}
       {showFolderModal && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+        <Portal><div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4"
           onClick={() => setShowFolderModal(false)}
         >
           <div
@@ -1554,12 +1555,12 @@ function TasksPageContent() {
               </button>
             </div>
           </div>
-        </div>
+        </div></Portal>
       )}
 
       {/* Add Task Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowAddModal(false)}>
+        <Portal><div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4" onClick={() => setShowAddModal(false)}>
           <div className="bg-white rounded-xl p-6 w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-lg font-semibold text-gray-900">Create New Task</h2>
@@ -1723,7 +1724,7 @@ function TasksPageContent() {
               </div>
             </div>
           </div>
-        </div>
+        </div></Portal>
       )}
     </div>
   );

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
+import { checkPermission } from "@/lib/checkPermission";
 import Folder from "@/lib/models/Folder";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +23,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const denied = await checkPermission("folders.create");
+  if (denied) return denied;
   try {
     await connectDB();
     const body = await req.json();

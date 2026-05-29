@@ -68,5 +68,24 @@ export interface PaginatedResponse<T> {
   totalPages: number;
 }
 
+export interface IRole {
+  _id: string;
+  name: string;
+  description: string;
+  permissions: string[];
+  color: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface IAttendanceLog {
+  _id: string;
+  developer: IDeveloper | string;
+  action: "login" | "logout";
+  remark: string | null;
+  timestamp: string;
+  date: string; // YYYY-MM-DD
+}
+
 export const STATUS_OPTIONS = ["Pending", "In Progress", "Completed"] as const;
 export const PRIORITY_OPTIONS = ["Low", "Medium", "High"] as const;

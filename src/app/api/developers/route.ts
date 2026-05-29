@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
+import { checkPermission } from "@/lib/checkPermission";
 import Developer from "@/lib/models/Developer";
 import { uploadToCloudinary } from "@/lib/cloudinary";
 
@@ -100,6 +101,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const denied = await checkPermission("users.create");
+  if (denied) return denied;
   try {
     await connectDB();
 

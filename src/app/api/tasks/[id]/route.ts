@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
+import { checkPermission } from "@/lib/checkPermission";
 import Task from "@/lib/models/Task";
 import "@/lib/models/Developer";
 
@@ -26,6 +27,8 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const denied = await checkPermission("tasks.edit");
+  if (denied) return denied;
   try {
     await connectDB();
     const body = await req.json();
@@ -49,6 +52,8 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const denied = await checkPermission("tasks.delete");
+  if (denied) return denied;
   try {
     await connectDB();
     const task = await Task.findByIdAndDelete(params.id);

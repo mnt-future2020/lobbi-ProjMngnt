@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import Developer from "@/lib/models/Developer";
+import AttendanceLog from "@/lib/models/AttendanceLog";
+import Role from "@/lib/models/Role";
 import { signToken } from "@/lib/auth";
 
 const ADMIN_EMAIL = "kansha@mntfuture.com";
@@ -75,6 +77,37 @@ export async function POST(req: NextRequest) {
       isAdmin: false,
     });
 
+    // Record attendance login — auto-detect "Back from Lunch"
+    try {
+      const now = new Date();
+      const istOffset = 5.5 * 60 * 60 * 1000;
+      const istDate = new Date(now.getTime() + istOffset);
+      const date = istDate.toISOString().split("T")[0];
+
+      // Check last attendance entry for this developer
+      const lastLog = await AttendanceLog.findOne({ developer: developer._id })
+        .sort({ timestamp: -1 })
+        .lean() as { action?: string; remark?: string } | null;
+
+      const loginRemark =
+        lastLog?.action === "logout" && lastLog?.remark === "Going to Lunch"
+          ? "Back from Lunch"
+          : null;
+
+      await AttendanceLog.create({ developer: developer._id, action: "login", remark: loginRemark, timestamp: now, date });
+    } catch (e) {
+      console.error("Attendance log error:", e);
+    }
+
+    // Fetch role permissions
+    let permissions: string[] = [];
+    try {
+      const roleDoc = await Role.findOne({ name: developer.role }).lean() as { permissions?: string[] } | null;
+      permissions = roleDoc?.permissions || [];
+    } catch (e) {
+      console.error("Role lookup error:", e);
+    }
+
     const response = NextResponse.json({
       user: {
         _id: developer._id,
@@ -83,6 +116,7 @@ export async function POST(req: NextRequest) {
         role: developer.role,
         avatar: developer.avatar,
         isAdmin: false,
+        permissions,
       },
       message: "Login successful",
     });

@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
+import { checkPermission } from "@/lib/checkPermission";
 import Task from "@/lib/models/Task";
+import Folder from "@/lib/models/Folder";
 import "@/lib/models/Developer";
 import "@/lib/models/Project";
-import "@/lib/models/Folder";
 
 export const dynamic = "force-dynamic";
 
@@ -134,9 +135,18 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const denied = await checkPermission("tasks.create");
+  if (denied) return denied;
   try {
     await connectDB();
     const body = await req.json();
+
+    // Auto-assign to first folder if no folder provided
+    if (!body.folder && body.project) {
+      const defaultFolder = await Folder.findOne({ project: body.project }).sort({ order: 1 }).lean() as { _id: unknown } | null;
+      if (defaultFolder) body.folder = defaultFolder._id;
+    }
+
     const task = await Task.create(body);
     const populated = await Task.findById(task._id)
       .populate("assignee", "name email avatar role")

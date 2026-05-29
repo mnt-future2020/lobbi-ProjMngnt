@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import Task from "@/lib/models/Task";
+import Folder from "@/lib/models/Folder";
 import mongoose from "mongoose";
 
 export const dynamic = "force-dynamic";
@@ -8,6 +9,21 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   try {
     await connectDB();
+
+    // Auto-fix: assign orphan tasks (no folder) to their project's first folder
+    const orphans = await Task.find({ folder: { $in: [null, undefined] }, project: { $ne: null } }).select("project").lean();
+    if (orphans.length > 0) {
+      const projectIds = Array.from(new Set(orphans.map((t) => String(t.project))));
+      for (const pid of projectIds) {
+        const defaultFolder = await Folder.findOne({ project: pid }).sort({ order: 1 }).lean() as { _id: unknown } | null;
+        if (defaultFolder) {
+          await Task.updateMany(
+            { project: pid, $or: [{ folder: null }, { folder: { $exists: false } }] },
+            { $set: { folder: defaultFolder._id } }
+          );
+        }
+      }
+    }
 
     const { searchParams } = new URL(req.url);
     const assignee = searchParams.get("assignee") || "";

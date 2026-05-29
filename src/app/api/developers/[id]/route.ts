@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
+import { checkPermission } from "@/lib/checkPermission";
 import Developer from "@/lib/models/Developer";
 import bcrypt from "bcryptjs";
 import { uploadToCloudinary } from "@/lib/cloudinary";
@@ -33,6 +34,8 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const denied = await checkPermission("users.edit");
+  if (denied) return denied;
   try {
     await connectDB();
 
@@ -91,6 +94,8 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const denied = await checkPermission("users.delete");
+  if (denied) return denied;
   try {
     await connectDB();
     const developer = await Developer.findByIdAndDelete(params.id);

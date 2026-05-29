@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
+import { checkPermission } from "@/lib/checkPermission";
 import Folder from "@/lib/models/Folder";
 import Task from "@/lib/models/Task";
 
@@ -7,6 +8,8 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const denied = await checkPermission("folders.edit");
+  if (denied) return denied;
   try {
     await connectDB();
     const body = await req.json();
@@ -23,6 +26,8 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const denied = await checkPermission("folders.delete");
+  if (denied) return denied;
   try {
     await connectDB();
     const folder = await Folder.findByIdAndDelete(params.id);

@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
+import { checkPermission } from "@/lib/checkPermission";
 import Task from "@/lib/models/Task";
 import Developer from "@/lib/models/Developer";
 import * as XLSX from "xlsx";
 
 export async function POST(req: NextRequest) {
+  const denied = await checkPermission("tasks.import");
+  if (denied) return denied;
   try {
     await connectDB();
 

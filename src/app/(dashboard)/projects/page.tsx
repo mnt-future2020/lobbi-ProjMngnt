@@ -19,6 +19,7 @@ import { useDevelopers } from "@/hooks/useDevelopers";
 import { useProjectContext } from "@/contexts/ProjectContext";
 import { cn, formatDate, apiError } from "@/lib/utils";
 import { IProject, IDeveloper } from "@/types";
+import Portal from "@/components/Portal";
 
 function ProjectsPageContent() {
   const { projects, isLoading, mutate } = useProjects();
@@ -297,8 +298,8 @@ function ProjectsPageContent() {
 
       {/* Create/Edit Modal */}
       {showModal && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+        <Portal><div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4"
           onClick={() => setShowModal(false)}
         >
           <div
@@ -418,7 +419,7 @@ function ProjectsPageContent() {
               </div>
             </form>
           </div>
-        </div>
+        </div></Portal>
       )}
     </div>
   );
