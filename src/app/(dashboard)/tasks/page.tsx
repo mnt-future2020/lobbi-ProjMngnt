@@ -17,14 +17,16 @@ import {
   Folder,
   FolderOpen,
   Pencil,
+  FolderInput,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTasks } from "@/hooks/useTasks";
 import { useDevelopers } from "@/hooks/useDevelopers";
 import { useFolders } from "@/hooks/useFolders";
+import { useProjects } from "@/hooks/useProjects";
 import { useFilterParams } from "@/hooks/useFilterParams";
 import { cn, formatDate, apiError } from "@/lib/utils";
-import { ITask, IAttachment, IFolder, STATUS_OPTIONS, PRIORITY_OPTIONS } from "@/types";
+import { ITask, IAttachment, IFolder, IProject, STATUS_OPTIONS, PRIORITY_OPTIONS } from "@/types";
 import MultiDatePicker from "@/components/MultiDatePicker";
 import MultiSelect from "@/components/MultiSelect";
 import { useProjectContext } from "@/contexts/ProjectContext";
@@ -89,6 +91,14 @@ function TasksPageContent() {
   const [savingFolder, setSavingFolder] = useState(false);
   const [activeFolder, setActiveFolder] = useState<string | null>(null); // null = folder list view
 
+  // Move task state
+  const [showMoveModal, setShowMoveModal] = useState(false);
+  const [moveTaskTarget, setMoveTaskTarget] = useState<ITask | null>(null); // single task or null for bulk
+  const [moveToProjectId, setMoveToProjectId] = useState("");
+  const [moveToFolderId, setMoveToFolderId] = useState("");
+  const [moveFolders, setMoveFolders] = useState<IFolder[]>([]);
+  const [isMoving, setIsMoving] = useState(false);
+
   // Reset to folder list whenever the selected project changes
   useEffect(() => {
     setActiveFolder(null);
@@ -114,6 +124,7 @@ function TasksPageContent() {
   const { tasks, total, isLoading, mutate } = useTasks(params);
   const { folders, mutate: mutateFolders } = useFolders(selectedProject?._id);
   const { developers: allDevelopers } = useDevelopers();
+  const { projects: allProjects } = useProjects();
 
   // Show only project members in dropdowns; fall back to all if no project selected
   const projectMembers = selectedProject?.members;
@@ -293,6 +304,53 @@ function TasksPageContent() {
       toast.error(err?.message || "Failed to delete tasks");
     } finally {
       setBulkDeleting(false);
+    }
+  };
+
+  // Fetch folders when move-target project changes
+  useEffect(() => {
+    if (!moveToProjectId) { setMoveFolders([]); setMoveToFolderId(""); return; }
+    fetch(`/api/folders?project=${moveToProjectId}`)
+      .then((r) => r.json())
+      .then((data: IFolder[]) => {
+        setMoveFolders(data || []);
+        setMoveToFolderId(data?.[0]?._id || "");
+      })
+      .catch(() => { setMoveFolders([]); setMoveToFolderId(""); });
+  }, [moveToProjectId]);
+
+  const openMoveModal = (task?: ITask) => {
+    setMoveTaskTarget(task || null);
+    setMoveToProjectId("");
+    setMoveToFolderId("");
+    setMoveFolders([]);
+    setShowMoveModal(true);
+  };
+
+  const executeMove = async () => {
+    if (!moveToProjectId) { toast.error("Select a project"); return; }
+    setIsMoving(true);
+    try {
+      const body = { project: moveToProjectId, folder: moveToFolderId || null };
+      const ids = moveTaskTarget ? [moveTaskTarget._id] : Array.from(selectedTasks);
+      await Promise.all(
+        ids.map((id) =>
+          fetch(`/api/tasks/${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          })
+        )
+      );
+      const count = ids.length;
+      toast.success(`${count} task${count > 1 ? "s" : ""} moved`);
+      setShowMoveModal(false);
+      setSelectedTasks(new Set());
+      mutate();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to move tasks");
+    } finally {
+      setIsMoving(false);
     }
   };
 
@@ -636,12 +694,21 @@ function TasksPageContent() {
       </td>
       {/* Actions */}
       <td className="px-4 py-3 text-right">
-        <button
-          onClick={() => deleteTask(task._id)}
-          className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors opacity-0 group-hover:opacity-100"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
+        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={() => openMoveModal(task)}
+            className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded transition-colors"
+            title="Move to project"
+          >
+            <FolderInput className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => deleteTask(task._id)}
+            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
       </td>
     </tr>
   );
@@ -867,6 +934,13 @@ function TasksPageContent() {
                   className="text-sm text-gray-500 hover:text-gray-700 px-3 py-1.5 rounded-lg hover:bg-white transition-colors"
                 >
                   Clear
+                </button>
+                <button
+                  onClick={() => openMoveModal()}
+                  className="flex items-center gap-1.5 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  <FolderInput className="w-3.5 h-3.5" />
+                  Move Selected
                 </button>
                 <button
                   onClick={bulkDeleteTasks}
@@ -1149,6 +1223,85 @@ function TasksPageContent() {
                   <Upload className="w-4 h-4" />
                 )}
                 {importing ? "Importing..." : "Import"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Move Task(s) Modal */}
+      {showMoveModal && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          onClick={() => setShowMoveModal(false)}
+        >
+          <div
+            className="bg-white rounded-xl p-6 w-full max-w-sm"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2">
+                <FolderInput className="w-5 h-5 text-blue-500" />
+                <h2 className="text-lg font-semibold text-gray-900">Move to Project</h2>
+              </div>
+              <button onClick={() => setShowMoveModal(false)} className="p-1 hover:bg-gray-100 rounded">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-sm text-gray-500 mb-4">
+              {moveTaskTarget
+                ? `Moving: ${moveTaskTarget.title}`
+                : `Moving ${selectedTasks.size} selected task${selectedTasks.size > 1 ? "s" : ""}`}
+            </p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Project</label>
+                <select
+                  className="select-field"
+                  value={moveToProjectId}
+                  onChange={(e) => setMoveToProjectId(e.target.value)}
+                >
+                  <option value="">Select project...</option>
+                  {allProjects.map((p: IProject) => (
+                    <option key={p._id} value={p._id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+              {moveFolders.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Folder</label>
+                  <select
+                    className="select-field"
+                    value={moveToFolderId}
+                    onChange={(e) => setMoveToFolderId(e.target.value)}
+                  >
+                    {moveFolders.map((f) => (
+                      <option key={f._id} value={f._id}>{f.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {moveToProjectId && moveFolders.length === 0 && (
+                <p className="text-xs text-gray-400">No folders in this project yet — task will be unfoldered</p>
+              )}
+            </div>
+
+            <div className="flex gap-3 mt-5">
+              <button
+                type="button"
+                onClick={() => setShowMoveModal(false)}
+                className="btn-secondary flex-1"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={executeMove}
+                disabled={!moveToProjectId || isMoving}
+                className="btn-primary flex-1 flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isMoving && <Loader2 className="w-4 h-4 animate-spin" />}
+                Move
               </button>
             </div>
           </div>
