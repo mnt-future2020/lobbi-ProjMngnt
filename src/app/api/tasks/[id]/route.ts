@@ -4,15 +4,19 @@ import { checkPermission } from "@/lib/checkPermission";
 import Task from "@/lib/models/Task";
 import "@/lib/models/Developer";
 
+const POPULATE = [
+  { path: "assignees", select: "name email avatar role" },
+  { path: "assignee", select: "name email avatar role" },
+  { path: "folder", select: "name" },
+];
+
 export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
     await connectDB();
-    const task = await Task.findById(params.id)
-      .populate("assignee", "name email avatar role")
-      .lean();
+    const task = await Task.findById(params.id).populate(POPULATE).lean();
     if (!task) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
     }
@@ -33,7 +37,7 @@ export async function PATCH(
     await connectDB();
     const body = await req.json();
     const task = await Task.findByIdAndUpdate(params.id, body, { new: true })
-      .populate("assignee", "name email avatar role")
+      .populate(POPULATE)
       .lean();
     if (!task) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 });

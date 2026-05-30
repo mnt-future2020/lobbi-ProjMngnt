@@ -60,16 +60,16 @@ export async function GET(req: NextRequest) {
     }
 
     if (assignee) {
-      const assignees = assignee.split(",").filter(Boolean);
-      const hasUnassigned = assignees.includes("unassigned");
-      const ids = assignees.filter((a) => a !== "unassigned");
+      const assigneeIds = assignee.split(",").filter(Boolean);
+      const hasUnassigned = assigneeIds.includes("unassigned");
+      const ids = assigneeIds.filter((a) => a !== "unassigned");
 
       if (hasUnassigned && ids.length === 0) {
-        conditions.push({ assignee: null });
+        conditions.push({ $or: [{ assignees: { $size: 0 } }, { assignees: { $exists: false } }] });
       } else if (hasUnassigned && ids.length > 0) {
-        conditions.push({ $or: [{ assignee: null }, { assignee: { $in: ids } }] });
+        conditions.push({ $or: [{ assignees: { $size: 0 } }, { assignees: { $in: ids } }] });
       } else {
-        conditions.push({ assignee: ids.length === 1 ? ids[0] : { $in: ids } });
+        conditions.push({ assignees: { $in: ids } });
       }
     }
 
@@ -111,6 +111,7 @@ export async function GET(req: NextRequest) {
     const [total, tasks] = await Promise.all([
       Task.countDocuments(filter),
       Task.find(filter)
+        .populate("assignees", "name email avatar role")
         .populate("assignee", "name email avatar role")
         .populate("folder", "name")
         .sort(sort)
@@ -147,8 +148,13 @@ export async function POST(req: NextRequest) {
       if (defaultFolder) body.folder = defaultFolder._id;
     }
 
+    // Support both old `assignee` and new `assignees` field
+    if (body.assignee && (!body.assignees || body.assignees.length === 0)) {
+      body.assignees = [body.assignee];
+    }
     const task = await Task.create(body);
     const populated = await Task.findById(task._id)
+      .populate("assignees", "name email avatar role")
       .populate("assignee", "name email avatar role")
       .populate("folder", "name")
       .lean();

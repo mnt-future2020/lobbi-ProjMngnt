@@ -6,7 +6,7 @@ export interface ITaskDoc extends Document {
   description: string;
   status: string;
   priority: string;
-  assignee: mongoose.Types.ObjectId | null;
+  assignees: mongoose.Types.ObjectId[];
   project: mongoose.Types.ObjectId;
   hours: number | null;
   dueDate: Date | null;
@@ -28,11 +28,16 @@ const TaskSchema = new Schema(
       enum: ["Low", "Medium", "High"],
       default: "Medium",
     },
+    // Support both old `assignee` (single) and new `assignees` (array)
     assignee: {
       type: Schema.Types.ObjectId,
       ref: "Developer",
       default: null,
     },
+    assignees: [{
+      type: Schema.Types.ObjectId,
+      ref: "Developer",
+    }],
     project: {
       type: Schema.Types.ObjectId,
       ref: "Project",
@@ -58,7 +63,8 @@ const TaskSchema = new Schema(
 );
 
 TaskSchema.index({ title: "text", description: "text" });
-TaskSchema.index({ project: 1, status: 1, priority: 1, assignee: 1 });
+TaskSchema.index({ project: 1, status: 1, priority: 1 });
+TaskSchema.index({ assignees: 1 });
 TaskSchema.index({ date: -1 });
 TaskSchema.index({ createdAt: -1 });
 

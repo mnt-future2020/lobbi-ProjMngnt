@@ -42,7 +42,8 @@ export interface ITask {
   description: string;
   status: "Pending" | "In Progress" | "Completed";
   priority: "Low" | "Medium" | "High";
-  assignee: IDeveloper | string | null;
+  assignee: IDeveloper | string | null; // legacy single
+  assignees: (IDeveloper | string)[];
   project: IProject | string;
   folder: IFolder | string | null;
   hours: number | null;

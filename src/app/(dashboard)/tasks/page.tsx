@@ -72,7 +72,7 @@ function TasksPageContent() {
     description: "",
     status: "Pending",
     priority: "Medium",
-    assignee: "",
+    assignees: [] as string[],
     dueDate: "",
     date: new Date().toISOString().split("T")[0],
     hours: "",
@@ -179,13 +179,13 @@ function TasksPageContent() {
   const handleInlineSelect = async (
     id: string,
     field: string,
-    value: string
+    value: string | string[]
   ) => {
     try {
       const res = await fetch(`/api/tasks/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ [field]: value || null }),
+        body: JSON.stringify({ [field]: Array.isArray(value) ? value : (value || null) }),
       });
       if (!res.ok) throw new Error(await apiError(res, "Failed to update task"));
       toast.success("Task updated");
@@ -233,7 +233,7 @@ function TasksPageContent() {
         project: selectedProject._id,
         folder: addTaskFolderId || undefined,
       };
-      if (newTask.assignee) body.assignee = newTask.assignee;
+      if (newTask.assignees.length > 0) body.assignees = newTask.assignees;
       if (newTask.dueDate) body.dueDate = newTask.dueDate;
       if (newTask.hours) body.hours = Number(newTask.hours);
 
@@ -255,7 +255,7 @@ function TasksPageContent() {
         description: "",
         status: "Pending",
         priority: "Medium",
-        assignee: "",
+        assignees: [],
         dueDate: "",
         date: new Date().toISOString().split("T")[0],
         hours: "",
@@ -619,18 +619,48 @@ function TasksPageContent() {
           </span>
         )}
       </td>
-      {/* Assignee */}
+      {/* Assignees */}
       <td className="px-4 py-3">
-        <select
-          className="text-sm bg-transparent border-0 text-gray-600 cursor-pointer hover:text-brand focus:outline-none focus:ring-0 p-0"
-          value={typeof task.assignee === "object" && task.assignee ? task.assignee._id : ""}
-          onChange={(e) => handleInlineSelect(task._id, "assignee", e.target.value)}
-        >
-          <option value="">Unassigned</option>
-          {developers.map((d) => (
-            <option key={d._id} value={d._id}>{d.name}</option>
-          ))}
-        </select>
+        {(() => {
+          const taskAssignees = (task.assignees || []).map((a) =>
+            typeof a === "object" ? a : null
+          ).filter(Boolean) as import("@/types").IDeveloper[];
+          return (
+            <div className="flex flex-wrap gap-1">
+              {taskAssignees.length > 0 ? taskAssignees.map((a) => (
+                <span key={a._id} className="inline-flex items-center gap-1 bg-brand/10 text-brand text-[11px] font-medium px-2 py-0.5 rounded-full">
+                  {a.name.split(" ")[0]}
+                  <button
+                    className="hover:text-red-500 ml-0.5"
+                    title={`Remove ${a.name}`}
+                    onClick={() => {
+                      const newIds = taskAssignees.filter((x) => x._id !== a._id).map((x) => x._id);
+                      handleInlineSelect(task._id, "assignees", newIds as any);
+                    }}
+                  >×</button>
+                </span>
+              )) : (
+                <span className="text-xs text-gray-300">—</span>
+              )}
+              <select
+                className="text-[11px] bg-transparent border-0 text-gray-400 cursor-pointer hover:text-brand focus:outline-none focus:ring-0 p-0 w-16"
+                value=""
+                onChange={(e) => {
+                  if (!e.target.value) return;
+                  const currentIds = taskAssignees.map((a) => a._id);
+                  if (!currentIds.includes(e.target.value)) {
+                    handleInlineSelect(task._id, "assignees", [...currentIds, e.target.value] as any);
+                  }
+                }}
+              >
+                <option value="">+ Add</option>
+                {developers.filter((d) => !taskAssignees.some((a) => a._id === d._id)).map((d) => (
+                  <option key={d._id} value={d._id}>{d.name}</option>
+                ))}
+              </select>
+            </div>
+          );
+        })()}
       </td>
       {/* Status */}
       <td className="px-4 py-3">
@@ -722,7 +752,7 @@ function TasksPageContent() {
               <>
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip,.rar"
                   multiple
                   className="hidden"
                   onChange={(e) => {
@@ -742,21 +772,33 @@ function TasksPageContent() {
               className="flex items-center gap-1 text-xs text-brand hover:text-brand-dark font-medium"
             >
               <Paperclip className="w-3 h-3" />
-              {task.attachments.length} image{task.attachments.length > 1 ? "s" : ""}
+              {task.attachments.length} file{task.attachments.length > 1 ? "s" : ""}
             </button>
           )}
         </div>
         {task.attachments && task.attachments.length > 0 && (
           <div className="flex gap-1 mt-1">
-            {task.attachments.slice(0, 4).map((att, idx) => (
-              <img
-                key={idx}
-                src={att.path}
-                alt={att.filename}
-                className="w-7 h-7 rounded border border-gray-200 object-cover cursor-pointer hover:ring-2 hover:ring-brand/30"
-                onClick={() => setAttachmentModal(task)}
-              />
-            ))}
+            {task.attachments.slice(0, 4).map((att, idx) => {
+              const isImage = /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(att.filename);
+              return isImage ? (
+                <img
+                  key={idx}
+                  src={att.path}
+                  alt={att.filename}
+                  className="w-7 h-7 rounded border border-gray-200 object-cover cursor-pointer hover:ring-2 hover:ring-brand/30"
+                  onClick={() => setAttachmentModal(task)}
+                />
+              ) : (
+                <div
+                  key={idx}
+                  className="w-7 h-7 rounded border border-gray-200 bg-gray-50 flex items-center justify-center cursor-pointer hover:ring-2 hover:ring-brand/30"
+                  onClick={() => setAttachmentModal(task)}
+                  title={att.filename}
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-gray-400" />
+                </div>
+              );
+            })}
             {task.attachments.length > 4 && (
               <div
                 className="w-7 h-7 rounded border border-gray-200 bg-gray-50 flex items-center justify-center text-[10px] text-gray-500 cursor-pointer hover:bg-gray-100"
@@ -1157,7 +1199,7 @@ function TasksPageContent() {
                 <label className="btn-secondary flex items-center gap-2 cursor-pointer text-sm">
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip,.rar"
                     multiple
                     className="hidden"
                     onChange={(e) => {
@@ -1189,29 +1231,57 @@ function TasksPageContent() {
               </div>
             </div>
 
-            {/* Modal Body - Image Grid */}
+            {/* Modal Body - File Grid */}
             <div className="overflow-y-auto p-6">
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                {attachmentModal.attachments?.map((att, idx) => (
+                {attachmentModal.attachments?.map((att, idx) => {
+                  const isImage = /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(att.filename);
+                  return (
                   <div
                     key={idx}
                     className="relative group/img rounded-lg overflow-hidden border border-gray-200"
                   >
-                    <img
-                      src={att.path}
-                      alt={att.filename}
-                      className="w-full h-40 object-cover cursor-pointer"
-                      onClick={() => setLightboxImage(att)}
-                    />
+                    {isImage ? (
+                      <img
+                        src={att.path}
+                        alt={att.filename}
+                        className="w-full h-40 object-cover cursor-pointer"
+                        onClick={() => setLightboxImage(att)}
+                      />
+                    ) : (
+                      <a
+                        href={att.path}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full h-40 bg-gray-50 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-gray-100"
+                      >
+                        <FileSpreadsheet className="w-10 h-10 text-gray-300" />
+                        <span className="text-[10px] text-gray-400 uppercase font-bold">
+                          {att.filename.split(".").pop()}
+                        </span>
+                      </a>
+                    )}
                     {/* Overlay with actions */}
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                      <button
-                        onClick={() => setLightboxImage(att)}
-                        className="p-2 bg-white rounded-full text-gray-700 hover:bg-gray-100"
-                        title="View full size"
-                      >
-                        <Images className="w-4 h-4" />
-                      </button>
+                      {isImage ? (
+                        <button
+                          onClick={() => setLightboxImage(att)}
+                          className="p-2 bg-white rounded-full text-gray-700 hover:bg-gray-100"
+                          title="View full size"
+                        >
+                          <Images className="w-4 h-4" />
+                        </button>
+                      ) : (
+                        <a
+                          href={att.path}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-2 bg-white rounded-full text-gray-700 hover:bg-gray-100"
+                          title="Download / Open"
+                        >
+                          <Paperclip className="w-4 h-4" />
+                        </a>
+                      )}
                       <button
                         onClick={() =>
                           removeAttachment(attachmentModal._id, idx)
@@ -1229,7 +1299,8 @@ function TasksPageContent() {
                       </p>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -1630,14 +1701,29 @@ function TasksPageContent() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Developer</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Assign To</label>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {newTask.assignees.map((id) => {
+                    const dev = developers.find((d) => d._id === id);
+                    return dev ? (
+                      <span key={id} className="inline-flex items-center gap-1 bg-brand/10 text-brand text-xs font-medium px-2 py-0.5 rounded-full">
+                        {dev.name}
+                        <button type="button" className="hover:text-red-500" onClick={() => setNewTask({ ...newTask, assignees: newTask.assignees.filter((a) => a !== id) })}>×</button>
+                      </span>
+                    ) : null;
+                  })}
+                </div>
                 <select
                   className="select-field"
-                  value={newTask.assignee}
-                  onChange={(e) => setNewTask({ ...newTask, assignee: e.target.value })}
+                  value=""
+                  onChange={(e) => {
+                    if (e.target.value && !newTask.assignees.includes(e.target.value)) {
+                      setNewTask({ ...newTask, assignees: [...newTask.assignees, e.target.value] });
+                    }
+                  }}
                 >
-                  <option value="">Select Developer</option>
-                  {developers.map((d) => (
+                  <option value="">+ Add developer</option>
+                  {developers.filter((d) => !newTask.assignees.includes(d._id)).map((d) => (
                     <option key={d._id} value={d._id}>{d.name}</option>
                   ))}
                 </select>
@@ -1675,7 +1761,7 @@ function TasksPageContent() {
                 <label className="flex items-center justify-center gap-2 border-2 border-dashed border-gray-300 rounded-lg py-4 cursor-pointer hover:border-brand hover:bg-brand/5 transition-colors">
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip,.rar"
                     multiple
                     className="hidden"
                     onChange={(e) => {
@@ -1685,7 +1771,7 @@ function TasksPageContent() {
                     }}
                   />
                   <Upload className="w-4 h-4 text-gray-400" />
-                  <span className="text-sm text-gray-500">Click to upload images</span>
+                  <span className="text-sm text-gray-500">Click to upload files</span>
                 </label>
                 {newTaskFiles.length > 0 && (
                   <div className="flex gap-2 mt-2 flex-wrap">
