@@ -17,6 +17,8 @@ import {
   Search,
   Folder,
   FolderOpen,
+  FileSpreadsheet,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
@@ -526,18 +528,30 @@ function PortalPageContent() {
                               className="flex items-center gap-1.5 text-xs text-brand hover:text-brand-dark font-medium"
                             >
                               <Paperclip className="w-3 h-3" />
-                              {task.attachments.length} image{task.attachments.length > 1 ? "s" : ""}
+                              {task.attachments.length} file{task.attachments.length > 1 ? "s" : ""}
                             </button>
                             <div className="flex gap-1 mt-1">
-                              {task.attachments.slice(0, 3).map((att, idx) => (
-                                <img
-                                  key={idx}
-                                  src={att.path}
-                                  alt={att.filename}
-                                  className="w-7 h-7 rounded border border-gray-200 object-cover cursor-pointer hover:ring-2 hover:ring-brand/30"
-                                  onClick={() => setLightboxImage(att)}
-                                />
-                              ))}
+                              {task.attachments.slice(0, 3).map((att, idx) => {
+                                const isImg = /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(att.filename);
+                                return isImg ? (
+                                  <img
+                                    key={idx}
+                                    src={att.path}
+                                    alt={att.filename}
+                                    className="w-7 h-7 rounded border border-gray-200 object-cover cursor-pointer hover:ring-2 hover:ring-brand/30"
+                                    onClick={() => setAttachmentModal(task)}
+                                  />
+                                ) : (
+                                  <div
+                                    key={idx}
+                                    className="w-7 h-7 rounded border border-gray-200 bg-gray-50 flex items-center justify-center cursor-pointer hover:ring-2 hover:ring-brand/30"
+                                    onClick={() => setAttachmentModal(task)}
+                                    title={att.filename}
+                                  >
+                                    <FileSpreadsheet className="w-3.5 h-3.5 text-gray-400" />
+                                  </div>
+                                );
+                              })}
                               {task.attachments.length > 3 && (
                                 <div
                                   className="w-7 h-7 rounded border border-gray-200 bg-gray-50 flex items-center justify-center text-[10px] text-gray-500 cursor-pointer hover:bg-gray-100"
@@ -677,7 +691,7 @@ function PortalPageContent() {
                 <label className="flex items-center justify-center gap-2 border-2 border-dashed border-gray-300 rounded-lg py-4 cursor-pointer hover:border-brand hover:bg-brand/5 transition-colors">
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip,.rar"
                     multiple
                     className="hidden"
                     onChange={(e) => {
@@ -686,7 +700,7 @@ function PortalPageContent() {
                     }}
                   />
                   <Upload className="w-4 h-4 text-gray-400" />
-                  <span className="text-sm text-gray-500">Click to upload images</span>
+                  <span className="text-sm text-gray-500">Click to upload files</span>
                 </label>
                 {newTaskFiles.length > 0 && (
                   <div className="flex gap-2 mt-2 flex-wrap">
@@ -752,7 +766,7 @@ function PortalPageContent() {
                 <h3 className="font-semibold text-gray-900">Attachments</h3>
                 <p className="text-sm text-gray-500 mt-0.5">
                   {attachmentModal.title} —{" "}
-                  {attachmentModal.attachments?.length || 0} image
+                  {attachmentModal.attachments?.length || 0} file
                   {(attachmentModal.attachments?.length || 0) !== 1 ? "s" : ""}
                 </p>
               </div>
@@ -765,27 +779,53 @@ function PortalPageContent() {
             </div>
             <div className="overflow-y-auto p-6">
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                {attachmentModal.attachments?.map((att, idx) => (
+                {attachmentModal.attachments?.map((att, idx) => {
+                  const isImg = /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(att.filename);
+                  return (
                   <div
                     key={idx}
-                    className="relative group/img rounded-lg overflow-hidden border border-gray-200 cursor-pointer"
-                    onClick={() => setLightboxImage(att)}
+                    className="relative group/img rounded-lg overflow-hidden border border-gray-200"
                   >
-                    <img
-                      src={att.path}
-                      alt={att.filename}
-                      className="w-full h-40 object-cover"
-                    />
-                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
-                      <div className="p-2 bg-white rounded-full text-gray-700">
-                        <Images className="w-4 h-4" />
-                      </div>
+                    {isImg ? (
+                      <img
+                        src={att.path}
+                        alt={att.filename}
+                        className="w-full h-40 object-cover cursor-pointer"
+                        onClick={() => setLightboxImage(att)}
+                      />
+                    ) : (
+                      <a
+                        href={`/api/download?url=${encodeURIComponent(att.path)}&filename=${encodeURIComponent(att.filename)}`}
+                        className="w-full h-40 bg-gray-50 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-gray-100"
+                      >
+                        <FileSpreadsheet className="w-10 h-10 text-gray-300" />
+                        <span className="text-[10px] text-gray-400 uppercase font-bold">{att.filename.split(".").pop()}</span>
+                      </a>
+                    )}
+                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                      {isImg ? (
+                        <button onClick={() => setLightboxImage(att)} className="p-2 bg-white rounded-full text-gray-700 hover:bg-gray-100">
+                          <Images className="w-4 h-4" />
+                        </button>
+                      ) : (
+                        <a href={`/api/download?url=${encodeURIComponent(att.path)}&filename=${encodeURIComponent(att.filename)}`} className="p-2 bg-white rounded-full text-gray-700 hover:bg-gray-100">
+                          <Download className="w-4 h-4" />
+                        </a>
+                      )}
                     </div>
-                    <div className="p-2 bg-white">
-                      <p className="text-xs text-gray-600 truncate">{att.filename}</p>
+                    <div className="p-2 bg-white flex items-center gap-1.5">
+                      <p className="text-xs text-gray-600 truncate flex-1">{att.filename}</p>
+                      <a
+                        href={`/api/download?url=${encodeURIComponent(att.path)}&filename=${encodeURIComponent(att.filename)}`}
+                        className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-brand flex-shrink-0"
+                        title="Download"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                      </a>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
