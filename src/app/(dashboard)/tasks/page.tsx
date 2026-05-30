@@ -19,6 +19,7 @@ import {
   Pencil,
   FolderInput,
   Palette,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTasks } from "@/hooks/useTasks";
@@ -1292,11 +1293,21 @@ function TasksPageContent() {
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
-                    {/* Filename */}
-                    <div className="p-2 bg-white">
-                      <p className="text-xs text-gray-600 truncate">
+                    {/* Filename + Download */}
+                    <div className="p-2 bg-white flex items-center gap-1.5">
+                      <p className="text-xs text-gray-600 truncate flex-1">
                         {att.filename}
                       </p>
+                      <a
+                        href={att.path}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        download={att.filename}
+                        className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-brand flex-shrink-0"
+                        title="Download"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                      </a>
                     </div>
                   </div>
                   );
