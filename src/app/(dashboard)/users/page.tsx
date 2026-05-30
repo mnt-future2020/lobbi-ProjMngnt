@@ -751,7 +751,7 @@ function UsersPageContent() {
                     className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border border-red-200 text-red-500 hover:bg-red-50 transition-colors font-medium disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {clearingAtt ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                    Clear {attendanceDate ? "Date" : "All"}
+                    Clear Data
                   </button>
                   <button onClick={openAddAttendance} className="btn-primary flex items-center gap-1.5 text-xs">
                     <Plus className="w-3.5 h-3.5" />
