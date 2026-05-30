@@ -112,12 +112,14 @@ export async function POST(req: NextRequest) {
       return isNaN(d.getTime()) ? null : d;
     };
 
-    // Resolve developer - can be comma-separated, take first match
-    const resolveDeveloper = (val: string): string | null => {
-      if (!val || val === "-") return null;
+    // Resolve developer(s) - supports comma-separated names, returns all matches
+    const resolveDevelopers = (val: string): string[] => {
+      if (!val || val === "-") return [];
       const names = val.split(",").map((n) => n.trim().toLowerCase());
+      const ids: string[] = [];
       for (const name of names) {
-        if (devMap.has(name)) return devMap.get(name)!;
+        if (!name) continue;
+        if (devMap.has(name)) { ids.push(devMap.get(name)!); continue; }
         // Partial match
         let found: string | null = null;
         devMap.forEach((devId, devName) => {
@@ -125,9 +127,9 @@ export async function POST(req: NextRequest) {
             found = devId;
           }
         });
-        if (found) return found;
+        if (found && !ids.includes(found)) ids.push(found);
       }
-      return null;
+      return ids;
     };
 
     const tasksToCreate = [];
@@ -147,11 +149,12 @@ export async function POST(req: NextRequest) {
       const rawDate = dateCol ? row[dateCol] : "";
       const rawDue = dueCol ? row[dueCol] : "";
 
+      const devIds = resolveDevelopers(rawDev);
       tasksToCreate.push({
         title,
         status: statusMap[rawStatus] || (validStatuses.includes(row[statusCol!]) ? row[statusCol!] : "Pending"),
         priority: priorityMap[rawPriority] || (validPriorities.includes(row[priorityCol!]) ? row[priorityCol!] : "Medium"),
-        assignee: resolveDeveloper(rawDev) || null,
+        assignees: devIds,
         project: projectId,
         folder: folderId || null,
         date: parseDate(rawDate) || new Date(),
