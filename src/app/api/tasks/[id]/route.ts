@@ -3,6 +3,7 @@ import { connectDB } from "@/lib/db";
 import { checkPermission } from "@/lib/checkPermission";
 import Task from "@/lib/models/Task";
 import "@/lib/models/Developer";
+import "@/lib/models/Folder";
 
 const POPULATE = [
   { path: "assignees", select: "name email avatar role" },
