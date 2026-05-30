@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
     // Build match stage for optional filters
     const matchStage: Record<string, unknown> = {};
     if (assignee) {
-      matchStage.assignee = new mongoose.Types.ObjectId(assignee);
+      matchStage.assignees = new mongoose.Types.ObjectId(assignee);
     }
     if (project) {
       matchStage.project = new mongoose.Types.ObjectId(project);
