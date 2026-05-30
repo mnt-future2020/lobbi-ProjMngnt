@@ -32,6 +32,7 @@ import { FOLDER_COLORS, getFolderColorStyle } from "@/lib/folderColors";
 import { ITask, IAttachment, IFolder, IProject, STATUS_OPTIONS, PRIORITY_OPTIONS } from "@/types";
 import MultiDatePicker from "@/components/MultiDatePicker";
 import MultiSelect from "@/components/MultiSelect";
+import { useConfirm } from "@/components/ConfirmModal";
 import Portal from "@/components/Portal";
 import { useProjectContext } from "@/contexts/ProjectContext";
 
@@ -49,6 +50,7 @@ const priorityColors: Record<string, string> = {
 
 function TasksPageContent() {
   const { selectedProject } = useProjectContext();
+  const confirm = useConfirm();
   const filters = useFilterParams({ sortBy: "date", sortOrder: "desc" });
 
   const page = parseInt(filters.get("page")) || 1;
@@ -271,7 +273,8 @@ function TasksPageContent() {
   };
 
   const deleteTask = async (id: string) => {
-    if (!confirm("Delete this task?")) return;
+    const { confirmed } = await confirm({ title: "Delete Task", message: "Are you sure you want to delete this task?", confirmLabel: "Delete", variant: "danger" });
+    if (!confirmed) return;
     try {
       const res = await fetch(`/api/tasks/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error(await apiError(res, "Failed to delete task"));
@@ -302,7 +305,8 @@ function TasksPageContent() {
 
   const bulkDeleteTasks = async () => {
     if (selectedTasks.size === 0) return;
-    if (!confirm(`Delete ${selectedTasks.size} selected task${selectedTasks.size > 1 ? "s" : ""}?`)) return;
+    const { confirmed } = await confirm({ title: "Delete Selected Tasks", message: `Delete ${selectedTasks.size} selected task${selectedTasks.size > 1 ? "s" : ""}? This cannot be undone.`, confirmLabel: "Delete All", variant: "danger" });
+    if (!confirmed) return;
     setBulkDeleting(true);
     try {
       const ids = Array.from(selectedTasks);
@@ -394,7 +398,7 @@ function TasksPageContent() {
       });
       if (!res.ok) throw new Error(await apiError(res, "Failed to upload"));
       toast.success(
-        `${newAttachments.length} image${newAttachments.length > 1 ? "s" : ""} uploaded`
+        `${newAttachments.length} file${newAttachments.length > 1 ? "s" : ""} uploaded`
       );
       mutate();
     } catch (err: any) {
@@ -532,7 +536,8 @@ function TasksPageContent() {
   };
 
   const deleteFolder = async (folder: IFolder) => {
-    if (!confirm(`Delete folder "${folder.name}"? Tasks inside will become unfoldered.`)) return;
+    const { confirmed } = await confirm({ title: "Delete Folder", message: `Delete folder "${folder.name}"? Tasks inside will become unfoldered.`, confirmLabel: "Delete", variant: "warning" });
+    if (!confirmed) return;
     try {
       const res = await fetch(`/api/folders/${folder._id}`, { method: "DELETE" });
       if (!res.ok) throw new Error(await apiError(res, "Failed to delete folder"));
@@ -1191,7 +1196,7 @@ function TasksPageContent() {
                 </h3>
                 <p className="text-sm text-gray-500 mt-0.5">
                   {attachmentModal.title} -{" "}
-                  {attachmentModal.attachments?.length || 0} image
+                  {attachmentModal.attachments?.length || 0} file
                   {(attachmentModal.attachments?.length || 0) !== 1 ? "s" : ""}
                 </p>
               </div>
@@ -1251,9 +1256,7 @@ function TasksPageContent() {
                       />
                     ) : (
                       <a
-                        href={att.path}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                        href={`/api/download?url=${encodeURIComponent(att.path)}&filename=${encodeURIComponent(att.filename)}`}
                         className="w-full h-40 bg-gray-50 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-gray-100"
                       >
                         <FileSpreadsheet className="w-10 h-10 text-gray-300" />
@@ -1274,13 +1277,11 @@ function TasksPageContent() {
                         </button>
                       ) : (
                         <a
-                          href={att.path}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                          href={`/api/download?url=${encodeURIComponent(att.path)}&filename=${encodeURIComponent(att.filename)}`}
                           className="p-2 bg-white rounded-full text-gray-700 hover:bg-gray-100"
-                          title="Download / Open"
+                          title="Download"
                         >
-                          <Paperclip className="w-4 h-4" />
+                          <Download className="w-4 h-4" />
                         </a>
                       )}
                       <button
@@ -1299,10 +1300,7 @@ function TasksPageContent() {
                         {att.filename}
                       </p>
                       <a
-                        href={att.path}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        download={att.filename}
+                        href={`/api/download?url=${encodeURIComponent(att.path)}&filename=${encodeURIComponent(att.filename)}`}
                         className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-brand flex-shrink-0"
                         title="Download"
                       >

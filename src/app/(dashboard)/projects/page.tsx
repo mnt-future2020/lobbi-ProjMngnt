@@ -14,6 +14,7 @@ import {
   Search,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useConfirm } from "@/components/ConfirmModal";
 import { useProjects } from "@/hooks/useProjects";
 import { useDevelopers } from "@/hooks/useDevelopers";
 import { useProjectContext } from "@/contexts/ProjectContext";
@@ -22,6 +23,7 @@ import { IProject, IDeveloper } from "@/types";
 import Portal from "@/components/Portal";
 
 function ProjectsPageContent() {
+  const confirm = useConfirm();
   const { projects, isLoading, mutate } = useProjects();
   const { developers } = useDevelopers();
   const { mutateProjects } = useProjectContext();
@@ -111,8 +113,8 @@ function ProjectsPageContent() {
   };
 
   const deleteProject = async (id: string) => {
-    if (!confirm("Delete this project? All tasks in this project will lose their project association."))
-      return;
+    const { confirmed } = await confirm({ title: "Delete Project", message: "Delete this project? All tasks in this project will lose their project association.", confirmLabel: "Delete", variant: "danger" });
+    if (!confirmed) return;
     try {
       const res = await fetch(`/api/projects/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error(await apiError(res, "Failed to delete project"));

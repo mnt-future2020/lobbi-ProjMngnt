@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// DELETE /api/attendance?date=YYYY-MM-DD  (bulk clear by date)
+// DELETE /api/attendance?date=YYYY-MM-DD&developer=id  (bulk clear)
 export async function DELETE(req: NextRequest) {
   const denied = await checkPermission("attendance.delete");
   if (denied) return denied;
@@ -82,9 +82,11 @@ export async function DELETE(req: NextRequest) {
     await connectDB();
     const { searchParams } = new URL(req.url);
     const date = searchParams.get("date");
+    const developer = searchParams.get("developer");
 
     const filter: Record<string, unknown> = {};
     if (date) filter.date = date;
+    if (developer) filter.developer = developer;
 
     const result = await AttendanceLog.deleteMany(filter);
     return NextResponse.json({ deleted: result.deletedCount });

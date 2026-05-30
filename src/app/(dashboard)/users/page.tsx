@@ -33,6 +33,7 @@ import { getFolderColorStyle, FOLDER_COLORS } from "@/lib/folderColors";
 import { IDeveloper, IFolder, ITask, IAttendanceLog, IRole, PaginatedResponse, STATUS_OPTIONS, PRIORITY_OPTIONS } from "@/types";
 import MultiDatePicker from "@/components/MultiDatePicker";
 import Portal from "@/components/Portal";
+import { useConfirm } from "@/components/ConfirmModal";
 
 const statusColors: Record<string, string> = {
   Pending: "bg-yellow-100 text-yellow-700 border-yellow-200",
@@ -66,6 +67,7 @@ function useDeveloperTasks(params: Record<string, string> | null) {
 function UsersPageContent() {
   const { selectedProject } = useProjectContext();
   const filtersHook = useFilterParams();
+  const confirm = useConfirm();
 
   const page = parseInt(filtersHook.get("page")) || 1;
   const search = filtersHook.get("search");
@@ -228,7 +230,8 @@ function UsersPageContent() {
   };
 
   const deleteDev = async (id: string) => {
-    if (!confirm("Delete this developer?")) return;
+    const { confirmed } = await confirm({ title: "Delete User", message: "Are you sure you want to delete this user? This cannot be undone.", confirmLabel: "Delete", variant: "danger" });
+    if (!confirmed) return;
     try {
       const res = await fetch(`/api/developers/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error(await apiError(res, "Failed to delete developer"));
@@ -365,7 +368,8 @@ function UsersPageContent() {
   };
 
   const deleteAttendance = async (id: string) => {
-    if (!confirm("Delete this attendance entry?")) return;
+    const { confirmed } = await confirm({ title: "Delete Entry", message: "Delete this attendance entry?", confirmLabel: "Delete", variant: "danger" });
+    if (!confirmed) return;
     try {
       const res = await fetch(`/api/attendance/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Failed");
@@ -377,12 +381,36 @@ function UsersPageContent() {
   };
 
   const clearAttendance = async () => {
-    const label = attendanceDate ? `all attendance for ${attendanceDate}` : "ALL attendance data";
-    if (!confirm(`Are you sure you want to delete ${label}? This cannot be undone.`)) return;
+    const { confirmed, values } = await confirm({
+      title: "Clear Attendance Data",
+      message: "Select a user and date to clear attendance records. Leave user empty to clear all users for that date.",
+      confirmLabel: "Clear Records",
+      variant: "danger",
+      fields: [
+        {
+          key: "developer",
+          label: "User",
+          type: "select",
+          placeholder: "All users",
+          options: allDevsFilter.map((d) => ({ value: d._id, label: d.name })),
+        },
+        {
+          key: "date",
+          label: "Date",
+          type: "date",
+          required: true,
+          defaultValue: attendanceDate,
+        },
+      ],
+    });
+    if (!confirmed) return;
+
     setClearingAtt(true);
     try {
-      const params = attendanceDate ? `?date=${attendanceDate}` : "";
-      const res = await fetch(`/api/attendance${params}`, { method: "DELETE" });
+      const params = new URLSearchParams();
+      if (values.date) params.set("date", values.date);
+      if (values.developer) params.set("developer", values.developer);
+      const res = await fetch(`/api/attendance?${params.toString()}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Failed");
       const data = await res.json();
       toast.success(`Cleared ${data.deleted} record${data.deleted !== 1 ? "s" : ""}`);

@@ -16,6 +16,7 @@ import {
 import { toast } from "sonner";
 import { cn, apiError } from "@/lib/utils";
 import { IRole } from "@/types";
+import { useConfirm } from "@/components/ConfirmModal";
 import { PERMISSIONS, PERMISSION_MODULES } from "@/lib/permissions";
 import Portal from "@/components/Portal";
 
@@ -36,6 +37,7 @@ function getRoleBadge(color?: string | null) {
 }
 
 function RolesPageContent() {
+  const confirm = useConfirm();
   const { data: roles = [], isLoading, mutate } = useSWR<IRole[]>("/api/roles", fetcher, {
     revalidateOnFocus: false,
   });
@@ -112,7 +114,8 @@ function RolesPageContent() {
   };
 
   const deleteRole = async (role: IRole) => {
-    if (!confirm(`Delete role "${role.name}"?`)) return;
+    const { confirmed } = await confirm({ title: "Delete Role", message: `Delete role "${role.name}"? Users with this role will need to be reassigned.`, confirmLabel: "Delete", variant: "danger" });
+    if (!confirmed) return;
     try {
       const res = await fetch(`/api/roles/${role._id}`, { method: "DELETE" });
       const data = await res.json();

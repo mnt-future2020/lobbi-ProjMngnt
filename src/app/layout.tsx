@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "sonner";
 import { ProjectProvider } from "@/contexts/ProjectContext";
+import { ConfirmProvider } from "@/components/ConfirmModal";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -20,7 +21,9 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <ProjectProvider>
-          {children}
+          <ConfirmProvider>
+            {children}
+          </ConfirmProvider>
         </ProjectProvider>
         <Toaster position="bottom-right" richColors closeButton />
       </body>
